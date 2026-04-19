@@ -195,7 +195,7 @@ def parse_and_diagnose(text):
             data.update({"category": "画像報告", "status": "情報", "metric_type": "Image Category", "value": label})
             return f"「{label}」として分類・保存しました。", data
 
-    return "データを受信しました。", data
+    return None, data
 
 def check_standard(metric_key, val):
     std = STANDARDS.get(metric_key)
@@ -211,7 +211,7 @@ def check_standard(metric_key, val):
     elif val > max_val:
         return f"基準値({min_val}-{max_val})を超えています。{std['high_action']}", "異常"
     else:
-        return f"{label}は基準値内({min_val}-{max_val})です。", "正常"
+        return f"【{label}】は正常です（基準: {min_val}-{max_val}）。", "正常"
 
 def handle_image():
     return "画像を確認しました。異常があれば通知します。"

@@ -57,20 +57,27 @@ def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text.strip()
     
-    # 0. Group Support & ID Discovery
+    # 0. Group/Room Support & ID Discovery
     is_group = (source_type == 'group')
-    group_id = event.source.group_id if is_group else None
-
-    # ID Discovery Command
-    if user_text == "探査":
-        reply = f"このトークルームのID:\n{group_id if is_group else user_id}"
+    is_room = (source_type == 'room')
+    is_private = (source_type == 'user')
+    
+    # ID for push messages (Group ID or Room ID)
+    target_id = None
+    if is_group: target_id = event.source.group_id
+    elif is_room: target_id = event.source.room_id
+    
+    # ID Discovery Command (Handle mentions)
+    if "探査" in user_text:
+        reply = f"この場所の種別: {source_type}\nこの場所のID:\n{target_id if target_id else user_id}"
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
         return
 
-    if is_group:
-        # Restrict reporting in groups (Redirect to solo)
+    if not is_private:
+        # Restrict reporting in groups/rooms (Redirect to solo)
+        # Using 'in' to handle mentions
         if "数値報告" in user_text or "写真報告" in user_text:
-            reply = "データの入力は、情報の正確性を保つため【個人チャット】でのみ受け付けています。\nこの下のメニューから、個人のトーク画面へ移動して報告をお願いします。完了後にこのグループへ結果を共有します！"
+            reply = "数値報告は【個人チャット】でのみ受け付けています。\nご自身のトーク画面へ移動してメニューから報告を開始してください。完了後にこの場所へ要約を共有します！"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
         return
 
