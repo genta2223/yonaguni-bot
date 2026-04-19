@@ -52,6 +52,15 @@ def force_menu():
         import traceback
         return f"Error: {str(e)}\n{traceback.format_exc()}", 500
 
+@app.route("/test_log", methods=['GET'])
+def test_log():
+    try:
+        result = save_log('dummy_id', 'TestUser', {'category': 'テスト', 'lot_name': 'TestLot'}, 'Direct log test', image_url='https://example.com/test_image.jpg')
+        return f"Test log result: {result}", 200
+    except Exception as e:
+        import traceback
+        return f"Log Error: {str(e)}\n{traceback.format_exc()}", 500
+
 @handler.add(PostbackEvent)
 def handle_postback(event):
     user_id = event.source.user_id

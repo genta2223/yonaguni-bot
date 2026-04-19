@@ -177,7 +177,7 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
             water_temp,                         # 8. 水温
             room_temp,                          # 9. 室温
             humidity,                           # 10. 湿度
-            image_url or "",                    # 11. 画像URL
+            image_url or data_dict.get("image_url", ""), # 11. 画像URL
             data_dict.get("category", ""),     # 12. カテゴリ
             "",                                 # 13. 外気温 (将来用)
             raw_message                         # 14. 備考/トラブル
