@@ -118,18 +118,20 @@ def handle_message(event):
             if LINE_GROUP_ID:
                 lot_name = final_data.get('lot_name', '不明')
                 days = final_data.get('days', '?')
-                if final_data.get('ph'): # Phase 2
-                    summary = (f"📢 報告完了：{lot_name}\n"
-                               f"（種まきから{days}日目）\n"
-                               f"栽培段数: {final_data.get('stage')}\n"
-                               f"pH: {final_data.get('ph')}  EC: {final_data.get('ec')}\n"
-                               f"水温: {final_data.get('water_temp')}℃\n"
-                               f"報告者: {user_name}")
-                else: # Phase 1
-                    summary = (f"🌱 芽が出ました：{lot_name}\n"
-                               f"（種まきから{days}日目）\n"
-                               f"状況: {final_data.get('remarks', '順調です')}\n"
-                               f"報告者: {user_name}")
+                week = (int(days) - 1) // 7 + 1
+                
+                if final_data.get('ph'): # Phase 2 (Wk 4+)
+                    status_text = (f"段数: {final_data.get('stage')}\n"
+                                   f"pH: {final_data.get('ph')}  EC: {final_data.get('ec')}\n"
+                                   f"水温: {final_data.get('water_temp')}℃")
+                else: # Phase 1 (Wk 1-3)
+                    status_text = f"経過日数: {days}日目（順調です）"
+
+                summary = (f"【与那国水耕栽培 報告】\n"
+                           f"報告者：{user_name}さん\n"
+                           f"野菜：{lot_name}（第{week}週目）\n"
+                           f"状態：\n{status_text}\n"
+                           f"写真：[画像報告を確認してください]") # Image links logic is complex, keeping it descriptive
                 
                 try:
                     line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
