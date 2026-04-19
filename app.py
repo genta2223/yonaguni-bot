@@ -64,15 +64,18 @@ def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text
 
+    # Fetch User Display Name
+    try:
+        profile = line_bot_api.get_profile(user_id)
+        user_name = profile.display_name
+    except Exception:
+        user_name = "Unknown User"
+
     # Parse logic
     response_msg, parsed_data = parse_and_diagnose(user_text)
 
-    # Save to CSV
-    if parsed_data:
-        category, status, metric_type, val = parsed_data
-        save_log(user_id, category, status, metric_type, val, user_text)
-    else:
-        save_log(user_id, "不明", "情報", "Unknown", None, user_text)
+    # Save to Google Sheets
+    save_log(user_id, user_name, parsed_data, user_text)
 
     # Reply
     line_bot_api.reply_message(
@@ -83,9 +86,24 @@ def handle_message(event):
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image_message(event):
     user_id = event.source.user_id
+    message_id = event.message.id
+
+    # Fetch User Display Name
+    try:
+        profile = line_bot_api.get_profile(user_id)
+        user_name = profile.display_name
+    except Exception:
+        user_name = "Unknown User"
     
     # Save log for image
-    save_log(user_id, "画像報告", "情報", "Image", None, "[Image Received]")
+    img_data = {
+        "category": "画像報告",
+        "status": "情報",
+        "metric_type": "Image",
+        "value": None,
+        "variety": "レタス"
+    }
+    save_log(user_id, user_name, img_data, "[Image Received]", image_url=message_id)
 
     # Reply with Phase 1 Quick Reply
     quick_reply = QuickReply(items=[
