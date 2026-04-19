@@ -66,22 +66,22 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         room_temp = val if metric_type == "Room Temp" else ""
         humidity = data_dict.get("humidity", "")
         
-        # Prepare row data (14 columns)
+        # Prepare row data (12 columns as specified by user)
+        # 1: Timestamp, 2: User Name, 3: Variety, 4: Stage, 5: pH, 6: EC, 
+        # 7: Water Temp, 8: Room Temp, 9: Humidity, 10: Image URL, 11: External Temp, 12: Remarks
         row = [
-            now,                        # Timestamp
-            user_name,                  # User Name
-            user_id,                    # User ID
-            data_dict.get("stage", ""), # Growth Stage
-            data_dict.get("variety", "レタス"), # Variety
-            ph,                         # pH
-            ec,                         # EC
-            water_temp,                 # Water Temp
-            room_temp,                  # Room Temp
-            humidity,                   # Humidity
-            image_url or "",            # Image URL / ID
-            "",                         # External Temp (Placeholder)
-            "",                         # External Humidity (Placeholder)
-            raw_message                 # Raw Message
+            now,                        # 1. タイムスタンプ
+            user_name,                  # 2. ユーザー名
+            data_dict.get("variety", "レタス"), # 3. 品種
+            data_dict.get("stage", ""), # 4. 栽培段数/週数
+            ph,                         # 5. pH
+            ec,                         # 6. EC
+            water_temp,                 # 7. 水温
+            room_temp,                  # 8. 室温
+            humidity,                   # 9. 湿度
+            image_url or "",            # 10. 画像URL
+            "",                         # 11. 外気温 (将来用)
+            raw_message                 # 12. 備考/トラブル
         ]
         
         sheet.append_row(row)
