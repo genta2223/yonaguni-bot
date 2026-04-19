@@ -11,7 +11,13 @@ load_dotenv()
 SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
 
+_cached_client = None
+
 def get_gsheet_client():
+    global _cached_client
+    if _cached_client:
+        return _cached_client
+
     # Priority 1: Use environment variable (Required for secure Production)
     service_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
     scopes = [
@@ -25,13 +31,15 @@ def get_gsheet_client():
         except json.JSONDecodeError:
             creds_dict = json.loads(service_json.replace('\\n', '\n'))
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        return gspread.authorize(creds)
+        _cached_client = gspread.authorize(creds)
+        return _cached_client
     
     # Priority 2: Try local file path (Best for local development)
     # Note: This file should NEVER be pushed to GitHub
     json_path = os.path.join(os.path.dirname(__file__), 'gen-lang-client-0030599774-9463e82c6afb.json')
     if os.path.exists(json_path):
-        return gspread.authorize(Credentials.from_service_account_file(json_path, scopes=scopes))
+        _cached_client = gspread.authorize(Credentials.from_service_account_file(json_path, scopes=scopes))
+        return _cached_client
     
     print("Error: Neither GOOGLE_SERVICE_ACCOUNT_JSON env var nor local credentials file found.")
     return None

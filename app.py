@@ -10,12 +10,12 @@ from linebot.models import (
     PostbackEvent, QuickReply, QuickReplyButton, MessageAction, PostbackAction
 )
 from bot_logic import (
-    handle_interactive_step, get_quick_reply,
+    handle_interactive_step, get_quick_reply, calculate_days_and_phase,
     STATE_AWAITING_LOT, STATE_AWAITING_CATEGORY, STATE_AWAITING_STAGE,
     STATE_AWAITING_PH, STATE_AWAITING_ROOM_TEMP, STATE_AWAITING_HUMIDITY,
     STATE_AWAITING_PHOTO_UPLOAD, STATE_AWAITING_PLANT_VARIETY
 )
-from storage import save_log, init_db, get_active_lots
+from storage import save_log, save_new_lot, init_db, get_active_lots
 
 load_dotenv()
 init_db()
@@ -25,6 +25,7 @@ os.makedirs(os.path.join("static", "images"), exist_ok=True)
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 LINE_GROUP_ID = os.getenv('LINE_GROUP_ID', 'C8b9dbb6dc99308366f28c0e136f67a55')
+ADMIN_TOKEN = os.getenv('ADMIN_TOKEN', 'yonaguni-hydro-2026')
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
@@ -32,6 +33,40 @@ handler = WebhookHandler(LINE_CHANNEL_SECRET)
 USER_STATES = {}
 USER_DATA = {}
 
+
+# ---------------------------------------------------------------------------
+# Image processing helper (S6: extracted for future Google Drive migration)
+# ---------------------------------------------------------------------------
+def process_and_store_image(message_id):
+    """
+    Downloads image from LINE, applies EXIF rotation, saves locally.
+    Returns the public URL string, or an error description on failure.
+    """
+    try:
+        message_content = line_bot_api.get_message_content(message_id)
+        chunks = []
+        for chunk in message_content.iter_content():
+            chunks.append(chunk)
+        image_bytes = b"".join(chunks)
+
+        img = Image.open(io.BytesIO(image_bytes))
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+
+        filename = f"{message_id}.jpg"
+        img.save(os.path.join("static", "images", filename), "JPEG", quality=85)
+
+        public_url = request.host_url.rstrip("/") + f"/static/images/{filename}"
+        return public_url
+    except Exception as e:
+        print(f"Error processing image {message_id}: {e}")
+        return f"処理エラー: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
 @app.route("/callback", methods=['POST'])
 def callback():
     signature = request.headers['X-Line-Signature']
@@ -42,8 +77,11 @@ def callback():
         abort(400)
     return 'OK'
 
+
 @app.route("/force_menu", methods=['GET'])
 def force_menu():
+    if request.args.get("token") != ADMIN_TOKEN:
+        abort(403)
     try:
         from scripts.setup_rich_menu import setup_rich_menu
         result = setup_rich_menu()
@@ -52,8 +90,11 @@ def force_menu():
         import traceback
         return f"Error: {str(e)}\n{traceback.format_exc()}", 500
 
+
 @app.route("/test_log", methods=['GET'])
 def test_log():
+    if request.args.get("token") != ADMIN_TOKEN:
+        abort(403)
     try:
         result = save_log('dummy_id', 'TestUser', {'category': 'テスト', 'lot_name': 'TestLot'}, 'Direct log test', image_url='https://example.com/test_image.jpg')
         return f"Test log result: {result}", 200
@@ -61,11 +102,15 @@ def test_log():
         import traceback
         return f"Log Error: {str(e)}\n{traceback.format_exc()}", 500
 
+
+# ---------------------------------------------------------------------------
+# Postback handler (rich menu buttons)
+# ---------------------------------------------------------------------------
 @handler.add(PostbackEvent)
 def handle_postback(event):
     user_id = event.source.user_id
     data = event.postback.data
-    
+
     # Always reset state on new button press for reliability
     USER_STATES.pop(user_id, None)
     USER_DATA.pop(user_id, None)
@@ -95,24 +140,22 @@ def handle_postback(event):
         else:
             lot_list = []
             for l in active_lots:
-                from bot_logic import calculate_days_and_phase
                 days, _ = calculate_days_and_phase(str(l['種まき日']))
                 lot_list.append(f"・{l['ロット名/品種']} ({days}日目)")
             reply = "【現在の稼働ロット】\n" + "\n".join(lot_list)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
-    elif data == "action=inquiry":
-        reply = ("【お問い合わせ】管理責任者まで直接ご連絡ください。\n"
-                 "マニュアル：https://docs.google.com/spreadsheets/d/1hV0EgMDl0lE6DdD5hlstK4Bnc_CuP5r18fKNnO_8aYw/edit")
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
+# ---------------------------------------------------------------------------
+# Text message handler (state machine driver)
+# ---------------------------------------------------------------------------
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_id = event.source.user_id
     user_text = event.message.text.strip()
-    
+
     if event.source.type != 'user':
-        return # Ignore group messages for guided flow
+        return  # Ignore group messages for guided flow
 
     if user_text in ["キャンセル", "中止"]:
         USER_STATES.pop(user_id, None)
@@ -124,8 +167,9 @@ def handle_message(event):
         state = USER_STATES[user_id]
         active_lots = get_active_lots()
         msg, next_state, data_update, qr = handle_interactive_step(user_id, state, user_text, active_lots)
-        
-        if user_id not in USER_DATA: USER_DATA[user_id] = {}
+
+        if user_id not in USER_DATA:
+            USER_DATA[user_id] = {}
         USER_DATA[user_id].update(data_update)
 
         if next_state == "DECIDE_PHASE":
@@ -140,27 +184,36 @@ def handle_message(event):
 
         if next_state == "DONE_PLANTING":
             final_data = USER_DATA.pop(user_id, {})
-            try: profile = line_bot_api.get_profile(user_id); user_name = profile.display_name
-            except: user_name = "管理者"
-            
-            from storage import save_new_lot
+            try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except Exception as e:
+                print(f"Profile fetch failed: {e}")
+                user_name = "管理者"
+
             lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"))
             USER_STATES.pop(user_id, None)
-            
+
             reply = f"作付け登録を完了しました！新しいロット【{lot_name}】を作成しました。"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-            
+
             if LINE_GROUP_ID:
                 summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\n野菜：{final_data.get('variety')}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}"
-                try: line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
-                except: pass
+                try:
+                    line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
+                except Exception as e:
+                    print(f"Group push failed: {e}")
             return
 
         if next_state == "DONE":
             final_data = USER_DATA.pop(user_id, {})
-            try: profile = line_bot_api.get_profile(user_id); user_name = profile.display_name
-            except: user_name = "管理者"
-            save_log(user_id, user_name, final_data, f"[Flow] {final_data}")
+            try:
+                profile = line_bot_api.get_profile(user_id)
+                user_name = profile.display_name
+            except Exception as e:
+                print(f"Profile fetch failed: {e}")
+                user_name = "管理者"
+            save_log(user_id, user_name, final_data, f"[Flow] {final_data}", image_url=final_data.get("image_url", "スキップ"))
             USER_STATES.pop(user_id, None)
             reply = f"報告を完了しました。記録ありがとうございました！\n（カテゴリ：{final_data.get('category')}）"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
@@ -174,56 +227,52 @@ def handle_message(event):
             USER_STATES.pop(user_id, None)
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
 
+
+# ---------------------------------------------------------------------------
+# Image handler
+# ---------------------------------------------------------------------------
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image(event):
     user_id = event.source.user_id
     if USER_STATES.get(user_id) == STATE_AWAITING_PHOTO_UPLOAD:
         final_data = USER_DATA.pop(user_id, {})
-        
-        try:
-            # Retrieve image binary from LINE
-            message_content = line_bot_api.get_message_content(event.message.id)
-            image_bytes = b""
-            for chunk in message_content.iter_content():
-                image_bytes += chunk
-                
-            # Open, rotate by EXIF, and save
-            img = Image.open(io.BytesIO(image_bytes))
-            img = ImageOps.exif_transpose(img)
-            if img.mode in ('RGBA', 'P'):
-                img = img.convert('RGB')
-            
-            filename = f"{event.message.id}.jpg"
-            img.save(os.path.join("static", "images", filename), "JPEG", quality=85)
-            
-            # Create a clickable URL to access the locally hosted image
-            public_url = request.host_url.rstrip("/") + f"/static/images/{filename}"
-        except Exception as e:
-            print(f"Error handling image: {e}")
-            public_url = f"Error: {e}"
 
+        public_url = process_and_store_image(event.message.id)
         final_data["image_url"] = public_url
-        try: profile = line_bot_api.get_profile(user_id); user_name = profile.display_name
-        except: user_name = "管理者"
-        
-        save_log(user_id, user_name, final_data, f"[Image Flow]", image_url=public_url)
+
+        try:
+            profile = line_bot_api.get_profile(user_id)
+            user_name = profile.display_name
+        except Exception as e:
+            print(f"Profile fetch failed: {e}")
+            user_name = "管理者"
+
+        save_log(user_id, user_name, final_data, "[Image Flow]", image_url=public_url)
         USER_STATES.pop(user_id, None)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
         send_group_summary(user_name, final_data, has_photo=True)
-        
+
     elif user_id in USER_STATES:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="数値の入力が完了していません。まずは数値を入力してください。"))
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在、写真を受け付けるステータスではありません。\n（1回の報告につき写真は1枚のみです。新しく報告を開始する場合はメニューから選択してください）"))
 
+
+# ---------------------------------------------------------------------------
+# Group notification
+# ---------------------------------------------------------------------------
 def send_group_summary(user_name, data, has_photo=False):
-    if not LINE_GROUP_ID: return
+    if not LINE_GROUP_ID:
+        return
     category = data.get('category', '一般')
     header = "🌱 発芽報告" if category == "種から発芽" else "【与那国水耕栽培 報告】"
     metrics = f"pH: {data.get('ph','-')} / EC: {data.get('ec','-')}\n室温: {data.get('room_temp','-')}℃ / 湿度: {data.get('humidity','-')}%"
     summary = f"{header}\n報告者：{user_name}\nロット：{data.get('lot_name')}\n{metrics}\n写真：{'あり' if has_photo else 'なし'}"
-    try: line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
-    except: pass
+    try:
+        line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
+    except Exception as e:
+        print(f"Group summary push failed: {e}")
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))

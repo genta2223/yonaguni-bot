@@ -33,11 +33,13 @@ def calculate_days_and_phase(seeding_date_str):
     except Exception:
         return 0, 1
 
-def handle_interactive_step(user_id, state, text, active_lots=[]):
+def handle_interactive_step(user_id, state, text, active_lots=None):
     """
     Handles a single step in the interactive reporting flow.
     Returns (response_msg, next_state, data_to_update, quick_reply)
     """
+    if active_lots is None:
+        active_lots = []
     if state == STATE_AWAITING_PLANT_VARIETY:
         return (f"【{text}】ですね。次に「種まき日」を入力してください。\n（例: 2026-04-19 または 本日）", 
                 STATE_AWAITING_PLANT_DATE, {"variety": text}, None)
@@ -146,10 +148,6 @@ def extract_number(text):
             return None
     return None
 
-def parse_and_diagnose(text):
-    data = {"category": "不明", "status": "情報", "metric_type": "Unknown", "value": None}
-    return None, data
-
 def check_standard(metric_key, val):
     std = STANDARDS.get(metric_key)
     if not std: return f"{metric_key} の基準値設定が見つかりません", "異常"
@@ -162,6 +160,3 @@ def check_standard(metric_key, val):
         return f"基準値({min_val}-{max_val})を超えています。{std['high_action']}", "異常"
     else:
         return f"【{label}】は正常です（基準: {min_val}-{max_val}）。", "正常"
-
-def handle_image():
-    return "画像を確認しました。異常があれば通知します。"

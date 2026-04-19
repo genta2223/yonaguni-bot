@@ -58,7 +58,7 @@ def setup_rich_menu():
     )
     if res.status_code not in [200, 201]:
         print(f"Failed to create rich menu: {res.text}")
-        return
+        return f"Failed to create rich menu: {res.status_code} {res.text}"
     
     rich_menu_id = res.json()["richMenuId"]
     print(f"Created Rich Menu ID: {rich_menu_id}")
@@ -75,7 +75,7 @@ def setup_rich_menu():
         )
     if img_res.status_code != 200:
         print(f"Failed to upload image: {img_res.text}")
-        return
+        return f"Failed to upload image: {img_res.status_code} {img_res.text}"
     print("Successfully uploaded Rich Menu image.")
 
     # 4. Set as default
