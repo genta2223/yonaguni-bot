@@ -3,6 +3,7 @@ from linebot.models import QuickReply, QuickReplyButton, MessageAction
 from config import STANDARDS, TROUBLE_RESPONSES
 
 # Conversation States
+STATE_AWAITING_LOT = "AWAITING_LOT" # New entry point
 STATE_AWAITING_STAGE = "AWAITING_STAGE"
 STATE_AWAITING_VARIETY = "AWAITING_VARIETY"
 STATE_AWAITING_ROOM_TEMP = "AWAITING_ROOM_TEMP"
@@ -10,43 +11,53 @@ STATE_AWAITING_HUMIDITY = "AWAITING_HUMIDITY"
 STATE_AWAITING_PH = "AWAITING_PH"
 STATE_AWAITING_EC = "AWAITING_EC"
 STATE_AWAITING_WATER_TEMP = "AWAITING_WATER_TEMP"
+STATE_AWAITING_DAYS_CONFIRM = "AWAITING_DAYS_CONFIRM" # For Phase 1
+
+import datetime
 
 def get_quick_reply(options):
     return QuickReply(items=[
         QuickReplyButton(action=MessageAction(label=opt, text=opt)) for opt in options
     ])
 
-def handle_interactive_step(user_id, state, text):
+def calculate_days_and_phase(seeding_date_str):
+    try:
+        seeding_date = datetime.datetime.strptime(seeding_date_str, '%Y-%m-%d').date()
+        days = (datetime.date.today() - seeding_date).days + 1
+        phase = 2 if days >= 22 else 1
+        return days, phase
+    except Exception:
+        return 0, 1
+
+def handle_interactive_step(user_id, state, text, active_lots=[]):
     """
     Handles a single step in the interactive reporting flow.
     Returns (response_msg, next_state, data_to_update, quick_reply)
     """
-    if state == STATE_AWAITING_STAGE:
-        return (f"【{text}】を記録しました。次に【品種】を選択してください。", 
-                STATE_AWAITING_VARIETY, 
-                {"stage": text}, 
-                get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"]))
+    if state == STATE_AWAITING_LOT:
+        # User selected a lot
+        lot = next((l for l in active_lots if l['ロット名/品種'] == text), None)
+        if not lot:
+            return ("リストからロットを選択してください。", state, {}, get_quick_reply([l['ロット名/品種'] for l in active_lots]))
+        
+        days, phase = calculate_days_and_phase(str(lot['種まき日']))
+        data = {"lot_name": text, "seeding_date": str(lot['種まき日']), "variety": lot.get('品種', 'レタス'), "days": days}
+        
+        if phase == 1:
+            return (f"【{text}】（種まきから{days}日目）を確認しました。現在の状態について一言、または写真を送ってください。", 
+                    STATE_AWAITING_DAYS_CONFIRM, data, None)
+        else:
+            return (f"【{text}】（種まきから{days}日目：本栽培期）の報告を開始します。まずは【栽培段数】を選択してください。", 
+                    STATE_AWAITING_STAGE, data, get_quick_reply(["1段目", "2段目", "3段目"]))
 
-    elif state == STATE_AWAITING_VARIETY:
-        return ("ありがとうございます。次に【室温】を入力してください（数字のみ）。", 
-                STATE_AWAITING_ROOM_TEMP, 
-                {"variety": text}, 
-                None)
+    elif state == STATE_AWAITING_DAYS_CONFIRM:
+        # Phase 1 completion
+        return ("報告ありがとうございます。苗の状態を記録しました。", "DONE", {"remarks": text, "stage": f"{extract_number(text) or ''}日目"}, None)
 
-    elif state == STATE_AWAITING_ROOM_TEMP:
-        val = extract_number(text)
-        if val is None: return ("数字で入力してください。室温は？", state, {}, None)
-        return ("記録しました。次に【湿度】を入力してください（％）。", 
-                STATE_AWAITING_HUMIDITY, 
-                {"room_temp": val}, 
-                None)
-
-    elif state == STATE_AWAITING_HUMIDITY:
-        val = extract_number(text)
-        if val is None: return ("数字で入力してください。湿度は？", state, {}, None)
-        return ("記録しました。次に【pH】を入力してください。", 
+    elif state == STATE_AWAITING_STAGE:
+        return (f"【{text}】を記録しました。次に【pH】を入力してください。", 
                 STATE_AWAITING_PH, 
-                {"humidity": val}, 
+                {"stage": text}, 
                 None)
 
     elif state == STATE_AWAITING_PH:
@@ -62,7 +73,7 @@ def handle_interactive_step(user_id, state, text):
         val = extract_number(text)
         if val is None: return ("数字で入力してください。ECは？", state, {}, None)
         msg, _ = check_standard("ec", val)
-        return (f"{msg}\n最後に【水温】を入力してください。", 
+        return (f"{msg}\n次に【水温】を入力してください。", 
                 STATE_AWAITING_WATER_TEMP, 
                 {"ec": val}, 
                 None)
@@ -71,9 +82,25 @@ def handle_interactive_step(user_id, state, text):
         val = extract_number(text)
         if val is None: return ("数字で入力してください。水温は？", state, {}, None)
         msg, _ = check_standard("water_temp", val)
-        return (f"{msg}\nすべてのデータの記録が完了しました！お疲れ様でした。", 
-                "DONE", 
+        return (f"{msg}\n次に【室温】を入力してください。", 
+                STATE_AWAITING_ROOM_TEMP, 
                 {"water_temp": val}, 
+                None)
+
+    elif state == STATE_AWAITING_ROOM_TEMP:
+        val = extract_number(text)
+        if val is None: return ("数字で入力してください。室温は？", state, {}, None)
+        return ("記録しました。最後に【湿度】を入力してください（％）。", 
+                STATE_AWAITING_HUMIDITY, 
+                {"room_temp": val}, 
+                None)
+
+    elif state == STATE_AWAITING_HUMIDITY:
+        val = extract_number(text)
+        if val is None: return ("数字で入力してください。湿度は？", state, {}, None)
+        return ("すべてのデータの記録が完了しました！お疲れ様でした。", 
+                "DONE", 
+                {"humidity": val}, 
                 None)
 
     return ("エラーが発生しました。もう一度「数値報告」から開始してください。", None, {}, None)

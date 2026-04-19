@@ -59,9 +59,10 @@ def setup_headers():
         if not first_row:
             headers = [
                 "タイムスタンプ",
+                "種まき日",
                 "ユーザー名",
-                "品種",
-                "栽培段数/週数",
+                "ロット名/品種",
+                "栽培段数/経過日数",
                 "pH",
                 "EC",
                 "水温",
@@ -78,15 +79,47 @@ def setup_headers():
 
 def init_db():
     """
-    Initializes the storage by ensuring connection and setting up headers.
+    Initializes the storage by ensuring connection and setting up sheets.
     """
     client = get_gsheet_client()
-    if client:
-        print("Google Sheets storage connection verified.")
-        setup_headers()
-        print("Google Sheets storage initialization complete.")
-    else:
+    if not client:
         print("Google Sheets storage initialization FAILED. Please check credentials.")
+        return
+
+    print("Google Sheets storage connection verified.")
+    setup_headers()
+    
+    # Initialize Master Lots sheet if missing
+    try:
+        sh = client.open_by_key(SPREADSHEET_ID)
+        try:
+            master_sheet = sh.worksheet("栽培マスター")
+        except gspread.exceptions.WorksheetNotFound:
+            master_sheet = sh.add_worksheet(title="栽培マスター", rows="100", cols="5")
+            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス"], 1)
+            # Add example data
+            jst = timezone(timedelta(hours=9))
+            today = (datetime.now(jst)).strftime('%Y-%m-%d')
+            master_sheet.append_row(["LOT-001", "レタス-A", today, "稼働中"])
+            print("Master Lots sheet initialized with example data.")
+    except Exception as e:
+        print(f"Error initializing Master sheet: {e}")
+
+    print("Google Sheets storage initialization complete.")
+
+def get_active_lots():
+    """
+    Returns a list of active lots from the '栽培マスター' sheet.
+    """
+    client = get_gsheet_client()
+    if not client: return []
+    try:
+        sheet = client.open_by_key(SPREADSHEET_ID).worksheet("栽培マスター")
+        records = sheet.get_all_records()
+        return [r for r in records if r["ステータス"] == "稼働中"]
+    except Exception as e:
+        print(f"Error fetching lots: {e}")
+        return []
 
 def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
     """
@@ -108,6 +141,7 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         # 2. Extract metrics from data_dict
         metric_type = data_dict.get("metric_type")
         val = data_dict.get("value")
+        seeding_date = data_dict.get("seeding_date", "")
         
         # Initialize columns with priority to specific keys (used in interactive mode)
         ph = data_dict.get("ph") if data_dict.get("ph") is not None else (val if metric_type == "pH" else "")
@@ -116,22 +150,21 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         room_temp = data_dict.get("room_temp") if data_dict.get("room_temp") is not None else (val if metric_type == "Room Temp" else "")
         humidity = data_dict.get("humidity") if data_dict.get("humidity") is not None else ""
         
-        # Prepare row data (12 columns as specified by user)
-        # 1: Timestamp, 2: User Name, 3: Variety, 4: Stage, 5: pH, 6: EC, 
-        # 7: Water Temp, 8: Room Temp, 9: Humidity, 10: Image URL, 11: External Temp, 12: Remarks
+        # Prepare row data (13 columns)
         row = [
-            now,                        # 1. タイムスタンプ
-            user_name,                  # 2. ユーザー名
-            data_dict.get("variety", "レタス"), # 3. 品種
-            data_dict.get("stage", ""), # 4. 栽培段数/週数
-            ph,                         # 5. pH
-            ec,                         # 6. EC
-            water_temp,                 # 7. 水温
-            room_temp,                  # 8. 室温
-            humidity,                   # 9. 湿度
-            image_url or "",            # 10. 画像URL
-            "",                         # 11. 外気温 (将来用)
-            raw_message                 # 12. 備考/トラブル
+            now,                                # 1. タイムスタンプ
+            seeding_date,                       # 2. 種まき日
+            user_name,                          # 3. ユーザー名
+            data_dict.get("lot_name", data_dict.get("variety", "レタス")), # 4. ロット名/品種
+            data_dict.get("stage", ""),         # 5. 栽培段数/経過日数
+            ph,                                 # 6. pH
+            ec,                                 # 7. EC
+            water_temp,                         # 8. 水温
+            room_temp,                          # 9. 室温
+            humidity,                           # 10. 湿度
+            image_url or "",                    # 11. 画像URL
+            "",                                 # 12. 外気温 (将来用)
+            raw_message                         # 13. 備考/トラブル
         ]
         
         sheet.append_row(row)
