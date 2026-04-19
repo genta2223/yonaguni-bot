@@ -88,12 +88,12 @@ def init_db():
         try:
             master_sheet = sh.worksheet("栽培マスター")
         except gspread.exceptions.WorksheetNotFound:
-            master_sheet = sh.add_worksheet(title="栽培マスター", rows="100", cols="5")
-            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス"], 1)
+            master_sheet = sh.add_worksheet(title="栽培マスター", rows="100", cols="6")
+            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス", "予定数量", "登録者"], 1)
             # Add example data
             jst = timezone(timedelta(hours=9))
             today = (datetime.now(jst)).strftime('%Y-%m-%d')
-            master_sheet.append_row(["LOT-001", "レタス-A", today, "稼働中"])
+            master_sheet.append_row(["LOT-001", "レタス-A", today, "稼働中", "100", "システム"])
             print("Master Lots sheet initialized with example data.")
     except Exception as e:
         print(f"Error initializing Master sheet: {e}")
@@ -109,10 +109,32 @@ def get_active_lots():
     try:
         sheet = client.open_by_key(SPREADSHEET_ID).worksheet("栽培マスター")
         records = sheet.get_all_records()
-        return [r for r in records if r["ステータス"] == "稼働中"]
+        return [r for r in records if r.get("ステータス") == "稼働中"]
     except Exception as e:
         print(f"Error fetching lots: {e}")
         return []
+
+def save_new_lot(user_name, variety, seeding_date, qty):
+    """
+    Saves a newly planted lot to '栽培マスター'.
+    """
+    client = get_gsheet_client()
+    if not client: return None
+
+    try:
+        sheet = client.open_by_key(SPREADSHEET_ID).worksheet("栽培マスター")
+        jst = timezone(timedelta(hours=9))
+        now = datetime.now(jst)
+        lot_id = f"LOT-{now.strftime('%Y%m%d-%H%M')}"
+        lot_name = f"{variety}-{now.strftime('%m%d')}"
+        
+        row = [lot_id, lot_name, seeding_date, "稼働中", qty, user_name]
+        sheet.append_row(row)
+        print(f"Successfully registered new planting: {lot_id}")
+        return lot_name
+    except Exception as e:
+        print(f"Error saving new lot: {e}")
+        return None
 
 def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
     """

@@ -11,7 +11,7 @@ from bot_logic import (
     handle_interactive_step, get_quick_reply,
     STATE_AWAITING_LOT, STATE_AWAITING_CATEGORY, STATE_AWAITING_STAGE,
     STATE_AWAITING_PH, STATE_AWAITING_ROOM_TEMP, STATE_AWAITING_HUMIDITY,
-    STATE_AWAITING_PHOTO_UPLOAD
+    STATE_AWAITING_PHOTO_UPLOAD, STATE_AWAITING_PLANT_VARIETY
 )
 from storage import save_log, init_db, get_active_lots
 
@@ -48,15 +48,21 @@ def handle_postback(event):
     USER_STATES.pop(user_id, None)
     USER_DATA.pop(user_id, None)
 
-    if data in ["action=numeric_report", "action=photo_report"]:
-        mode = "numerical" if "numeric" in data else "photo"
+    if data == "action=planting_report":
+        USER_STATES[user_id] = STATE_AWAITING_PLANT_VARIETY
+        USER_DATA[user_id] = {"mode": "planting"}
+        reply_text = "【与那国水耕栽培】作付け報告（新規登録）を開始します。\nまずは【野菜の種類】を選択してください。"
+        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ"])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+
+    elif data == "action=numeric_report":
         active_lots = get_active_lots()
         if not active_lots:
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在稼働中のロットがありません。"))
             return
         USER_STATES[user_id] = STATE_AWAITING_LOT
-        USER_DATA[user_id] = {"mode": mode}
-        reply_text = f"【与那国水耕栽培】{'数値' if mode=='numerical' else '写真'}報告を開始します。まずは【対象ロット】を選択してください。"
+        USER_DATA[user_id] = {"mode": "numerical"}
+        reply_text = "【与那国水耕栽培】数値報告を開始します。まずは【対象ロット】を選択してください。"
         quick_reply = get_quick_reply([l['ロット名/品種'] for l in active_lots])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
 
@@ -108,6 +114,24 @@ def handle_message(event):
             else:
                 USER_STATES[user_id] = STATE_AWAITING_STAGE
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text="【栽培段数】を選択してください。", quick_reply=get_quick_reply(["1段目", "2段目", "3段目"])))
+            return
+
+        if next_state == "DONE_PLANTING":
+            final_data = USER_DATA.pop(user_id, {})
+            try: profile = line_bot_api.get_profile(user_id); user_name = profile.display_name
+            except: user_name = "管理者"
+            
+            from storage import save_new_lot
+            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"))
+            USER_STATES.pop(user_id, None)
+            
+            reply = f"作付け登録を完了しました！新しいロット【{lot_name}】を作成しました。"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+            
+            if LINE_GROUP_ID:
+                summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\n野菜：{final_data.get('variety')}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}"
+                try: line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
+                except: pass
             return
 
         if next_state == "DONE":

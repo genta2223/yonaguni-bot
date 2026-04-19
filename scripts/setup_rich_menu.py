@@ -7,7 +7,7 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 # Use the generated image path
-IMAGE_PATH = "rich_menu_final_v3.jpg"
+IMAGE_PATH = "rich_menu_final_v4.png"
 
 HEADERS = {
     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
@@ -23,24 +23,20 @@ def setup_rich_menu():
     rich_menu_body = {
         "size": {"width": 2500, "height": 1686}, 
         "selected": True,
-        "name": "Yonaguni Hydroponics Final Menu v3",
+        "name": "Yonaguni Hydroponics Final Menu v4",
         "chatBarText": "与那国水耕メニュー",
         "areas": [
             {
                 "bounds": {"x": 0, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "postback", "data": "action=numeric_report", "displayText": "数値報告を開始します"}
+                "action": {"type": "postback", "data": "action=planting_report", "displayText": "作付け報告（新規登録）を開始します"}
             },
             {
                 "bounds": {"x": 1250, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "postback", "data": "action=photo_report", "displayText": "写真報告を開始します"}
+                "action": {"type": "postback", "data": "action=numeric_report", "displayText": "数値報告を開始します"}
             },
             {
-                "bounds": {"x": 0, "y": 843, "width": 1250, "height": 843},
+                "bounds": {"x": 0, "y": 843, "width": 2500, "height": 843},
                 "action": {"type": "postback", "data": "action=status_check", "displayText": "栽培状況を確認します"}
-            },
-            {
-                "bounds": {"x": 1250, "y": 843, "width": 1250, "height": 843},
-                "action": {"type": "postback", "data": "action=inquiry", "displayText": "お問い合わせ"}
             }
         ]
     }
@@ -64,7 +60,7 @@ def setup_rich_menu():
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
             headers={
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                "Content-Type": "image/jpeg"
+                "Content-Type": "image/png"
             },
             data=f
         )

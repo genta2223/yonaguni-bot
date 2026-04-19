@@ -14,6 +14,11 @@ STATE_AWAITING_ROOM_TEMP = "AWAITING_ROOM_TEMP"
 STATE_AWAITING_HUMIDITY = "AWAITING_HUMIDITY"
 STATE_AWAITING_PHOTO_UPLOAD = "AWAITING_PHOTO_UPLOAD"
 
+# Planting Report States
+STATE_AWAITING_PLANT_VARIETY = "AWAITING_PLANT_VARIETY"
+STATE_AWAITING_PLANT_DATE = "AWAITING_PLANT_DATE"
+STATE_AWAITING_PLANT_QTY = "AWAITING_PLANT_QTY"
+
 def get_quick_reply(options):
     return QuickReply(items=[
         QuickReplyButton(action=MessageAction(label=opt, text=opt)) for opt in options
@@ -33,7 +38,33 @@ def handle_interactive_step(user_id, state, text, active_lots=[]):
     Handles a single step in the interactive reporting flow.
     Returns (response_msg, next_state, data_to_update, quick_reply)
     """
-    if state == STATE_AWAITING_LOT:
+    if state == STATE_AWAITING_PLANT_VARIETY:
+        return (f"【{text}】ですね。次に「種まき日」を入力してください。\n（例: 2026-04-19 または 本日）", 
+                STATE_AWAITING_PLANT_DATE, {"variety": text}, None)
+
+    elif state == STATE_AWAITING_PLANT_DATE:
+        if "本日" in text or "今日" in text:
+            jst = datetime.timezone(datetime.timedelta(hours=9))
+            date_str = datetime.datetime.now(jst).strftime('%Y-%m-%d')
+        else:
+            match = re.search(r'20\d{2}-\d{1,2}-\d{1,2}', text)
+            if not match: return ("形式が正しくありません。「YYYY-MM-DD」または「本日」と入力してください。", state, {}, None)
+            # Ensure correct formatting with zero-padding
+            try:
+                date_str = datetime.datetime.strptime(match.group(0), '%Y-%m-%d').strftime('%Y-%m-%d')
+            except ValueError:
+                return ("無効な日付です。「YYYY-MM-DD」で入力してください。", state, {}, None)
+            
+        return (f"種まき日を【{date_str}】で設定しました。最後に「予定数量」を数字で入力してください。（例: 100）", 
+                STATE_AWAITING_PLANT_QTY, {"seeding_date": date_str}, None)
+
+    elif state == STATE_AWAITING_PLANT_QTY:
+        qty = extract_number(text)
+        if qty is None: return ("予定数量を数字で入力してください。", state, {}, None)
+        return ("予定数量を受け付けました。作付け登録を完了します！", 
+                "DONE_PLANTING", {"qty": int(qty)}, None)
+
+    elif state == STATE_AWAITING_LOT:
         # User selected a lot
         lot = next((l for l in active_lots if l['ロット名/品種'] == text), None)
         if not lot:
