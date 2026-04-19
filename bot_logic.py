@@ -125,7 +125,7 @@ def handle_interactive_step(user_id, state, text, active_lots=[]):
     elif state == STATE_AWAITING_HUMIDITY:
         val = extract_number(text)
         if val is None: return ("数字で入力してください。湿度は？", state, {}, None)
-        return ("数値の入力がすべて完了しました！最後に【現在の様子の写真】を送ってください。\n（写真はスキップする場合「なし」と入力してください）", 
+        return ("数値の入力がすべて完了しました！\n\nそれでは、最後に**横向き（ランドスケープ）**で作物の写真を**1枚だけ**撮影して送信してください。\n※横向きで撮ることで、成長の比較がしやすくなります！\n（写真はスキップする場合「なし」と入力してください）", 
                 STATE_AWAITING_PHOTO_UPLOAD, 
                 {"humidity": val}, 
                 None)

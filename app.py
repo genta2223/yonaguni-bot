@@ -1,4 +1,6 @@
 import os
+import io
+from PIL import Image, ImageOps
 from flask import Flask, request, abort
 from dotenv import load_dotenv
 from linebot import LineBotApi, WebhookHandler
@@ -17,7 +19,8 @@ from storage import save_log, init_db, get_active_lots
 
 load_dotenv()
 init_db()
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', static_url_path='/static')
+os.makedirs(os.path.join("static", "images"), exist_ok=True)
 
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
@@ -167,17 +170,42 @@ def handle_image(event):
     user_id = event.source.user_id
     if USER_STATES.get(user_id) == STATE_AWAITING_PHOTO_UPLOAD:
         final_data = USER_DATA.pop(user_id, {})
-        final_data["image_url"] = event.message.id
+        
+        try:
+            # Retrieve image binary from LINE
+            message_content = line_bot_api.get_message_content(event.message.id)
+            image_bytes = b""
+            for chunk in message_content.iter_content():
+                image_bytes += chunk
+                
+            # Open, rotate by EXIF, and save
+            img = Image.open(io.BytesIO(image_bytes))
+            img = ImageOps.exif_transpose(img)
+            if img.mode in ('RGBA', 'P'):
+                img = img.convert('RGB')
+            
+            filename = f"{event.message.id}.jpg"
+            img.save(os.path.join("static", "images", filename), "JPEG", quality=85)
+            
+            # Create a clickable URL to access the locally hosted image
+            public_url = request.host_url.rstrip("/") + f"/static/images/{filename}"
+        except Exception as e:
+            print(f"Error handling image: {e}")
+            public_url = f"Error: {e}"
+
+        final_data["image_url"] = public_url
         try: profile = line_bot_api.get_profile(user_id); user_name = profile.display_name
         except: user_name = "管理者"
-        save_log(user_id, user_name, final_data, f"[Image Flow]", image_url=event.message.id)
+        
+        save_log(user_id, user_name, final_data, f"[Image Flow]", image_url=public_url)
         USER_STATES.pop(user_id, None)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
         send_group_summary(user_name, final_data, has_photo=True)
+        
     elif user_id in USER_STATES:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="数値の入力が完了していません。まずは数値を入力してください。"))
     else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="報告を開始してから写真を送ってください（メニューを選択）。"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在、写真を受け付けるステータスではありません。\n（1回の報告につき写真は1枚のみです。新しく報告を開始する場合はメニューから選択してください）"))
 
 def send_group_summary(user_name, data, has_photo=False):
     if not LINE_GROUP_ID: return
