@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-IMAGE_PATH = os.path.join(os.path.dirname(__file__), "..", "rich_menu_final_v4.png")
+IMAGE_PATH = os.path.join(os.path.dirname(__file__), "..", "rich_menu_final_v4.jpg")
 
 HEADERS = {
     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
@@ -69,7 +69,7 @@ def setup_rich_menu():
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
             headers={
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                "Content-Type": "image/png"
+                "Content-Type": "image/jpeg"
             },
             data=f
         )
