@@ -12,37 +12,29 @@ SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
 
 def get_gsheet_client():
-    # Use the specific file uploaded by the user
-    json_path = os.path.join(os.path.dirname(__file__), 'gen-lang-client-0030599774-9463e82c6afb.json')
-    print(f"DEBUG: Looking for credentials at: {json_path}")
+    # Priority 1: Use environment variable (Required for secure Production)
+    service_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
     
-    try:
-        scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        
-        # 1. Try local file path (Best for local development)
-        if os.path.exists(json_path):
-            return gspread.authorize(Credentials.from_service_account_file(json_path, scopes=scopes))
-        
-        # 2. Try environment variable (Required for Render deployment)
-        service_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
-        if service_json:
-            # Handle potential escaping issues in the env var string
-            try:
-                creds_dict = json.loads(service_json)
-            except json.JSONDecodeError:
-                creds_dict = json.loads(service_json.replace('\\n', '\n'))
-            
-            creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-            return gspread.authorize(creds)
-        else:
-            print("Error: Neither credentials file nor GOOGLE_SERVICE_ACCOUNT_JSON found.")
-            return None
-    except Exception as e:
-        print(f"Error initializing Google Sheets client: {e}")
-        return None
+    if service_json:
+        try:
+            creds_dict = json.loads(service_json)
+        except json.JSONDecodeError:
+            creds_dict = json.loads(service_json.replace('\\n', '\n'))
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        return gspread.authorize(creds)
+    
+    # Priority 2: Try local file path (Best for local development)
+    # Note: This file should NEVER be pushed to GitHub
+    json_path = os.path.join(os.path.dirname(__file__), 'gen-lang-client-0030599774-9463e82c6afb.json')
+    if os.path.exists(json_path):
+        return gspread.authorize(Credentials.from_service_account_file(json_path, scopes=scopes))
+    
+    print("Error: Neither GOOGLE_SERVICE_ACCOUNT_JSON env var nor local credentials file found.")
+    return None
 
 def setup_headers():
     """

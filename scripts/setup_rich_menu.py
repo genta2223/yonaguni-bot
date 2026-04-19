@@ -7,7 +7,7 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 # Use the generated image path
-IMAGE_PATH = "rich_menu_final_v2.jpg"
+IMAGE_PATH = "rich_menu_final_v3.jpg"
 
 HEADERS = {
     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
@@ -28,19 +28,19 @@ def setup_rich_menu():
         "areas": [
             {
                 "bounds": {"x": 0, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "message", "text": "数値報告"}
+                "action": {"type": "postback", "data": "action=numeric_report", "displayText": "数値報告を開始します"}
             },
             {
                 "bounds": {"x": 1250, "y": 0, "width": 1250, "height": 843},
-                "action": {"type": "camera", "label": "写真報告"}
+                "action": {"type": "postback", "data": "action=photo_report", "displayText": "写真報告を開始します"}
             },
             {
                 "bounds": {"x": 0, "y": 843, "width": 1250, "height": 843},
-                "action": {"type": "message", "text": "栽培状況確認"}
+                "action": {"type": "postback", "data": "action=status_check", "displayText": "栽培状況を確認します"}
             },
             {
                 "bounds": {"x": 1250, "y": 843, "width": 1250, "height": 843},
-                "action": {"type": "uri", "uri": "https://docs.google.com/spreadsheets/d/1hV0EgMDl0lE6DdD5hlstK4Bnc_CuP5r18fKNnO_8aYw/edit"}
+                "action": {"type": "postback", "data": "action=inquiry", "displayText": "お問い合わせ"}
             }
         ]
     }
