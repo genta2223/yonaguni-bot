@@ -12,6 +12,9 @@ STATE_AWAITING_PH = "AWAITING_PH"
 STATE_AWAITING_EC = "AWAITING_EC"
 STATE_AWAITING_WATER_TEMP = "AWAITING_WATER_TEMP"
 STATE_AWAITING_DAYS_CONFIRM = "AWAITING_DAYS_CONFIRM" # For Phase 1
+STATE_AWAITING_PHOTO_LOT = "AWAITING_PHOTO_LOT"
+STATE_AWAITING_PHOTO_CATEGORY = "AWAITING_PHOTO_CATEGORY"
+STATE_AWAITING_PHOTO_UPLOAD = "AWAITING_PHOTO_UPLOAD"
 
 import datetime
 
@@ -49,6 +52,24 @@ def handle_interactive_step(user_id, state, text, active_lots=[]):
         else:
             return (f"【{text}】（種まきから{days}日目：本栽培期）の報告を開始します。まずは【栽培段数】を選択してください。", 
                     STATE_AWAITING_STAGE, data, get_quick_reply(["1段目", "2段目", "3段目"]))
+
+    elif state == STATE_AWAITING_PHOTO_LOT:
+        # User selected a lot for a PHOTO report
+        lot = next((l for l in active_lots if l['ロット名/品種'] == text), None)
+        if not lot:
+            return ("リストからロットを選択してください。", state, {}, get_quick_reply([l['ロット名/品種'] for l in active_lots]))
+        
+        days, phase = calculate_days_and_phase(str(lot['種まき日']))
+        data = {"lot_name": text, "seeding_date": str(lot['種まき日']), "variety": lot.get('品種', 'レタス'), "days": days, "phase": phase}
+        
+        categories = ["種から発芽", "定植後（成長期）", "収穫間近", "異常発生"]
+        return (f"【{text}】は現在「{days}日目」ですね。現在の状況カテゴリを選択してください。", 
+                STATE_AWAITING_PHOTO_CATEGORY, data, get_quick_reply(categories))
+
+    elif state == STATE_AWAITING_PHOTO_CATEGORY:
+        # Category selected
+        return (f"カテゴリ「{text}」で受け付けました。次に【写真を送信】してください。", 
+                STATE_AWAITING_PHOTO_UPLOAD, {"category": text}, None)
 
     elif state == STATE_AWAITING_DAYS_CONFIRM:
         # Phase 1 completion

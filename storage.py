@@ -69,6 +69,7 @@ def setup_headers():
                 "室温",
                 "湿度",
                 "画像URL",
+                "カテゴリ",
                 "外気温",
                 "備考/トラブル"
             ]
@@ -150,7 +151,7 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         room_temp = data_dict.get("room_temp") if data_dict.get("room_temp") is not None else (val if metric_type == "Room Temp" else "")
         humidity = data_dict.get("humidity") if data_dict.get("humidity") is not None else ""
         
-        # Prepare row data (13 columns)
+        # Prepare row data (14 columns)
         row = [
             now,                                # 1. タイムスタンプ
             seeding_date,                       # 2. 種まき日
@@ -163,12 +164,19 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
             room_temp,                          # 9. 室温
             humidity,                           # 10. 湿度
             image_url or "",                    # 11. 画像URL
-            "",                                 # 12. 外気温 (将来用)
-            raw_message                         # 13. 備考/トラブル
+            data_dict.get("category", ""),     # 12. カテゴリ
+            "",                                 # 13. 外気温 (将来用)
+            raw_message                         # 14. 備考/トラブル
         ]
         
-        sheet.append_row(row)
+        res = sheet.append_row(row)
         print(f"Successfully logged to Google Sheets for user {user_name}")
+        
+        # Return row number or info
+        try:
+            return res.get('updates', {}).get('updatedRange', '').split('!')[-1]
+        except:
+            return "登録完了"
 
     except Exception as e:
         import traceback
