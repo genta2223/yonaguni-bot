@@ -7,7 +7,7 @@ load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 # Use the generated image path
-IMAGE_PATH = r"C:\Users\genta\.gemini\antigravity\brain\25ab8214-db12-46b5-a087-6cb1562f0fc1\rich_menu_yonaguni_1776589733888.png"
+IMAGE_PATH = "rich_menu_fixed.jpg"
 
 HEADERS = {
     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
@@ -23,8 +23,8 @@ def setup_rich_menu():
     rich_menu_body = {
         "size": {"width": 2500, "height": 1686},
         "selected": True,
-        "name": "Yonaguni Hydroponics Menu",
-        "chatBarText": "メニューを開く",
+        "name": "Yonaguni Hydroponics Fixed Menu",
+        "chatBarText": "与那国水耕メニュー",
         "areas": [
             {
                 "bounds": {"x": 0, "y": 0, "width": 1250, "height": 843},
@@ -51,7 +51,7 @@ def setup_rich_menu():
         headers=HEADERS,
         data=json.dumps(rich_menu_body)
     )
-    if res.status_code != 201:
+    if res.status_code not in [200, 201]:
         print(f"Failed to create rich menu: {res.text}")
         return
     
@@ -59,12 +59,12 @@ def setup_rich_menu():
     print(f"Created Rich Menu ID: {rich_menu_id}")
 
     # 3. Upload image
-    with open(IMAGE_PATH, 'rb') as f:
+    with open('rich_menu_resized.jpg', 'rb') as f:
         img_res = requests.post(
             f"https://api-data.line.me/v2/bot/richmenu/{rich_menu_id}/content",
             headers={
                 "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
-                "Content-Type": "image/png"
+                "Content-Type": "image/jpeg"
             },
             data=f
         )

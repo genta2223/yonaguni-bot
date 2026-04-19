@@ -52,8 +52,24 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
+    source_type = event.source.type
     user_id = event.source.user_id
     user_text = event.message.text.strip()
+    
+    # 0. Group Support & Mention Logic
+    is_group = (source_type == 'group')
+    mention_found = False
+    
+    # Check for mention (LINE SDK v3 property if available, but let's check text)
+    if is_group:
+        # Check if the message is specifically for the bot
+        # Typical mention format: "@BotName Numerical Report"
+        if user_text.startswith("@") or "数値報告" in user_text or "写真報告" in user_text:
+            mention_found = True
+        
+        # If no mention and not a direct command, ignore to avoid cluttering spreadsheet
+        if not mention_found and user_text not in ["数値報告", "写真報告", "栽培状況確認", "キャンセル"]:
+            return
 
     # Cancel command
     if user_text in ["キャンセル", "戻る", "中止"]:
@@ -71,8 +87,12 @@ def handle_message(event):
         USER_DATA[user_id].update(data_update)
 
         if next_state == "DONE":
+            # Get user name (Handle groups)
             try:
-                profile = line_bot_api.get_profile(user_id)
+                if is_group:
+                    profile = line_bot_api.get_group_member_profile(event.source.group_id, user_id)
+                else:
+                    profile = line_bot_api.get_profile(user_id)
                 user_name = profile.display_name
             except Exception:
                 user_name = "Unknown User"
@@ -90,23 +110,30 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_msg))
         return
 
-    # 2. Trigger Numerical Report Flow
-    if user_text == "数値報告":
+    # 2. Trigger Numerical Report Flow (Priority)
+    if "数値報告" in user_text:
         USER_STATES[user_id] = STATE_AWAITING_STAGE
         USER_DATA[user_id] = {}
-        reply_text = "報告を開始します。中止する場合は「キャンセル」と打ってください。\n\nまずは【栽培段数】を選択してください。"
+        reply_text = "【与那国水耕栽培】数値報告を開始します。中止する場合は「キャンセル」と打ってください。\n\nまずは【栽培段数】を選択してください。"
         quick_reply = get_quick_reply(["1段目（1-2週目）", "2段目（3-4週目）", "3段目（5-6週目）"])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         return
 
     # 3. Existing One-off Parser
     try:
-        profile = line_bot_api.get_profile(user_id)
+        if is_group:
+            profile = line_bot_api.get_group_member_profile(event.source.group_id, user_id)
+        else:
+            profile = line_bot_api.get_profile(user_id)
         user_name = profile.display_name
     except Exception:
         user_name = "Unknown User"
 
     response_msg, parsed_data = parse_and_diagnose(user_text)
+    # Check if the text actually looks like a report before logging (to avoid junk in groups)
+    if is_group and parsed_data["category"] == "不明":
+        return
+
     save_log(user_id, user_name, parsed_data, user_text)
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=response_msg))
 

@@ -22,7 +22,7 @@ def handle_interactive_step(user_id, state, text):
     Returns (response_msg, next_state, data_to_update, quick_reply)
     """
     if state == STATE_AWAITING_STAGE:
-        return ("栽培状況を確認しました。次に【品種】を選択してください。", 
+        return (f"【{text}】を記録しました。次に【品種】を選択してください。", 
                 STATE_AWAITING_VARIETY, 
                 {"stage": text}, 
                 get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"]))

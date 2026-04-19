@@ -3,38 +3,88 @@ import json
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration from environment variables
 SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
 SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
 
 def get_gsheet_client():
-    if not SERVICE_ACCOUNT_JSON:
-        print("Error: GOOGLE_SERVICE_ACCOUNT_JSON not set.")
-        return None
+    # Use the specific file uploaded by the user
+    json_path = os.path.join(os.path.dirname(__file__), 'gen-lang-client-0030599774-9463e82c6afb.json')
+    print(f"DEBUG: Looking for credentials at: {json_path}")
     
     try:
         scopes = [
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]
-        # Load credentials from JSON string in env var
-        creds_dict = json.loads(SERVICE_ACCOUNT_JSON)
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        return gspread.authorize(creds)
+        
+        # 1. Try local file path (Best for local development)
+        if os.path.exists(json_path):
+            return gspread.authorize(Credentials.from_service_account_file(json_path, scopes=scopes))
+        
+        # 2. Try environment variable (Required for Render deployment)
+        service_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
+        if service_json:
+            # Handle potential escaping issues in the env var string
+            try:
+                creds_dict = json.loads(service_json)
+            except json.JSONDecodeError:
+                creds_dict = json.loads(service_json.replace('\\n', '\n'))
+            
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+            return gspread.authorize(creds)
+        else:
+            print("Error: Neither credentials file nor GOOGLE_SERVICE_ACCOUNT_JSON found.")
+            return None
     except Exception as e:
         print(f"Error initializing Google Sheets client: {e}")
         return None
 
+def setup_headers():
+    """
+    Inserts the header row if the sheet is empty.
+    """
+    client = get_gsheet_client()
+    if not client:
+        return
+
+    try:
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        # Check if 1st row is empty
+        first_row = sheet.row_values(1)
+        if not first_row:
+            headers = [
+                "タイムスタンプ",
+                "ユーザー名",
+                "品種",
+                "栽培段数/週数",
+                "pH",
+                "EC",
+                "水温",
+                "室温",
+                "湿度",
+                "画像URL",
+                "外気温",
+                "備考/トラブル"
+            ]
+            sheet.insert_row(headers, 1)
+            print("Spreadsheet headers initialized.")
+    except Exception as e:
+        print(f"Error setting up headers: {e}")
+
 def init_db():
     """
-    In the Google Sheets version, we assume the sheet and header exist.
-    If we wanted to be robust, we could create them if missing.
-    For now, we'll just log an initialization message.
+    Initializes the storage by ensuring connection and setting up headers.
     """
     client = get_gsheet_client()
     if client:
-        print("Google Sheets storage initialized successfully.")
+        print("Google Sheets storage connection verified.")
+        setup_headers()
+        print("Google Sheets storage initialization complete.")
     else:
         print("Google Sheets storage initialization FAILED. Please check credentials.")
 
@@ -88,4 +138,6 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         print(f"Successfully logged to Google Sheets for user {user_name}")
 
     except Exception as e:
+        import traceback
         print(f"Error saving to Google Sheets: {e}")
+        traceback.print_exc()

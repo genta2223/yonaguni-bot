@@ -1,5 +1,7 @@
-import os
 from storage import save_log, init_db
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def run_test():
     print("--- Storage Verification Test ---")
