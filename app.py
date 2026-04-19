@@ -39,6 +39,16 @@ def callback():
         abort(400)
     return 'OK'
 
+@app.route("/force_menu", methods=['GET'])
+def force_menu():
+    try:
+        from scripts.setup_rich_menu import setup_rich_menu
+        result = setup_rich_menu()
+        return f"Menu Force Update Result: {result}", 200
+    except Exception as e:
+        import traceback
+        return f"Error: {str(e)}\n{traceback.format_exc()}", 500
+
 @handler.add(PostbackEvent)
 def handle_postback(event):
     user_id = event.source.user_id

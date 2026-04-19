@@ -6,18 +6,27 @@ from dotenv import load_dotenv
 load_dotenv()
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-# Use the generated image path
-IMAGE_PATH = "rich_menu_final_v4.png"
+IMAGE_PATH = os.path.join(os.path.dirname(__file__), "..", "rich_menu_final_v4.png")
 
 HEADERS = {
     "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
     "Content-Type": "application/json"
 }
 
+def delete_all_old_menus():
+    if not LINE_CHANNEL_ACCESS_TOKEN: return
+    res = requests.get("https://api.line.me/v2/bot/richmenu/list", headers=HEADERS)
+    if res.status_code == 200:
+        menus = res.json().get("richmenus", [])
+        for menu in menus:
+            requests.delete(f"https://api.line.me/v2/bot/richmenu/{menu['richMenuId']}", headers=HEADERS)
+
 def setup_rich_menu():
     if not LINE_CHANNEL_ACCESS_TOKEN:
         print("Error: LINE_CHANNEL_ACCESS_TOKEN not found in .env")
-        return
+        return "Error: No Token"
+        
+    delete_all_old_menus()
 
     # 1. Define Rich Menu
     rich_menu_body = {
@@ -76,8 +85,9 @@ def setup_rich_menu():
     )
     if default_res.status_code != 200:
         print(f"Failed to set default rich menu: {default_res.text}")
-        return
+        return f"Failed to set default: {default_res.text}"
     print("Successfully set as default rich menu!")
+    return "Menu successfully updated!"
 
 if __name__ == "__main__":
     setup_rich_menu()
