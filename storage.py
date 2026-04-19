@@ -59,12 +59,12 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         metric_type = data_dict.get("metric_type")
         val = data_dict.get("value")
         
-        # Initialize columns
-        ph = val if metric_type == "pH" else ""
-        ec = val if metric_type == "EC" else ""
-        water_temp = val if metric_type == "Water Temp" else ""
-        room_temp = val if metric_type == "Room Temp" else ""
-        humidity = data_dict.get("humidity", "")
+        # Initialize columns with priority to specific keys (used in interactive mode)
+        ph = data_dict.get("ph") if data_dict.get("ph") is not None else (val if metric_type == "pH" else "")
+        ec = data_dict.get("ec") if data_dict.get("ec") is not None else (val if metric_type == "EC" else "")
+        water_temp = data_dict.get("water_temp") if data_dict.get("water_temp") is not None else (val if metric_type == "Water Temp" else "")
+        room_temp = data_dict.get("room_temp") if data_dict.get("room_temp") is not None else (val if metric_type == "Room Temp" else "")
+        humidity = data_dict.get("humidity") if data_dict.get("humidity") is not None else ""
         
         # Prepare row data (12 columns as specified by user)
         # 1: Timestamp, 2: User Name, 3: Variety, 4: Stage, 5: pH, 6: EC, 
