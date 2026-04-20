@@ -213,6 +213,7 @@ def upload_image_to_drive(image_bytes, filename):
         media = MediaIoBaseUpload(io.BytesIO(image_bytes), mimetype='image/jpeg', resumable=True)
         file_metadata = {
             'name': filename,
+            'mimeType': 'image/jpeg',
             'parents': [folder_id]
         }
         file = client.files().create(
