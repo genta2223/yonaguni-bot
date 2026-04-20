@@ -177,6 +177,8 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
             data_dict.get("category", ""),
             "",
             raw_message
+        ]
+        
         row = [str(x) if x is not None else "" for x in base_row]
         
         # table_range="A1" と insert_data_option="INSERT_ROWS" を指定して、右へズレる不具合(階段現象)を防ぎます。
