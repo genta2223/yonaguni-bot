@@ -177,11 +177,12 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
             data_dict.get("category", ""),
             "",
             raw_message
-        ]
-        
         row = [str(x) if x is not None else "" for x in base_row]
         
-        res = sheet.append_row(row)
+        # table_range="A1" と insert_data_option="INSERT_ROWS" を指定して、右へズレる不具合(階段現象)を防ぎます。
+        res = sheet.append_row(row, table_range="A1", insert_data_option="INSERT_ROWS")
+        updated_range = res.get('updates', {}).get('updatedRange', 'Unknown Range')
+        print(f"Sheet update success! Data appended to: {updated_range}")
         print(f"Successfully logged to Google Sheets for user {user_name}")
         
         try:
