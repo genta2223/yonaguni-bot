@@ -174,7 +174,7 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         humidity = data_dict.get("humidity") if data_dict.get("humidity") is not None else ""
         
         # Prepare row data (14 columns)
-        row = [
+        base_row = [
             now,                                # 1. タイムスタンプ
             seeding_date,                       # 2. 種まき日
             user_name,                          # 3. ユーザー名
@@ -190,6 +190,7 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
             "",                                 # 13. 外気温 (将来用)
             raw_message                         # 14. 備考/トラブル
         ]
+        row = [str(x) if x is not None else "" for x in base_row]
         
         res = sheet.append_row(row)
         print(f"Successfully logged to Google Sheets for user {user_name}")
@@ -204,3 +205,4 @@ def save_log(user_id, user_name, data_dict, raw_message, image_url=None):
         import traceback
         print(f"Error saving to Google Sheets: {e}")
         traceback.print_exc()
+        raise e

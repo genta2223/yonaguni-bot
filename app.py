@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage, ImageMessage,
+    MessageEvent, TextMessage, TextSendMessage, ImageMessage, ImageSendMessage,
     PostbackEvent, QuickReply, QuickReplyButton, MessageAction, PostbackAction
 )
 from bot_logic import (
@@ -15,7 +15,7 @@ from bot_logic import (
     STATE_AWAITING_PH, STATE_AWAITING_ROOM_TEMP, STATE_AWAITING_HUMIDITY,
     STATE_AWAITING_PHOTO_UPLOAD, STATE_AWAITING_PLANT_VARIETY
 )
-from storage import save_log, save_new_lot, init_db, get_active_lots
+from storage import save_log, save_new_lot, init_db, get_active_lots, upload_image_to_drive
 
 load_dotenv()
 init_db()
@@ -55,9 +55,14 @@ def process_and_store_image(message_id):
             img = img.convert('RGB')
 
         filename = f"{message_id}.jpg"
-        img.save(os.path.join("static", "images", filename), "JPEG", quality=85)
+        
+        # Save to memory instead of local disk
+        img_byte_arr = io.BytesIO()
+        img.save(img_byte_arr, format='JPEG', quality=85)
+        processed_image_bytes = img_byte_arr.getvalue()
 
-        public_url = request.host_url.rstrip("/") + f"/static/images/{filename}"
+        # Upload to Google Drive and get the public URL
+        public_url = upload_image_to_drive(processed_image_bytes, filename)
         return public_url
     except Exception as e:
         print(f"Error processing image {message_id}: {e}")
@@ -157,10 +162,50 @@ def handle_message(event):
     if event.source.type != 'user':
         return  # Ignore group messages for guided flow
 
-    if user_text in ["キャンセル", "中止"]:
+    if user_text in ["キャンセル", "中止", "やめる"]:
         USER_STATES.pop(user_id, None)
         USER_DATA.pop(user_id, None)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="中断しました。"))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="入力をキャンセルしました。最初からやり直してください。"))
+        return
+
+    # Handle rich menu text commands
+    if user_text == "作付け報告（新規登録）を開始します":
+        USER_STATES.pop(user_id, None)
+        USER_DATA.pop(user_id, None)
+        USER_STATES[user_id] = STATE_AWAITING_PLANT_VARIETY
+        USER_DATA[user_id] = {"mode": "planting"}
+        reply_text = "【与那国水耕栽培】作付け報告（新規登録）を開始します。\nまずは【野菜の種類】を選択してください。"
+        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ"])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+        return
+
+    elif user_text == "数値報告を開始します":
+        USER_STATES.pop(user_id, None)
+        USER_DATA.pop(user_id, None)
+        active_lots = get_active_lots()
+        if not active_lots:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在稼働中のロットがありません。"))
+            return
+        USER_STATES[user_id] = STATE_AWAITING_LOT
+        USER_DATA[user_id] = {"mode": "numerical"}
+        reply_text = "【与那国水耕栽培】数値報告を開始します。まずは【対象ロット】を選択してください。"
+        quick_reply = get_quick_reply([l['ロット名/品種'] for l in active_lots])
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
+        return
+
+    elif user_text == "栽培状況を確認します":
+        USER_STATES.pop(user_id, None)
+        USER_DATA.pop(user_id, None)
+        active_lots = get_active_lots()
+        if not active_lots:
+            reply = "現在稼働中のロットはありません。"
+        else:
+            lot_list = []
+            for l in active_lots:
+                days, _ = calculate_days_and_phase(str(l['種まき日']))
+                lot_list.append(f"・{l['ロット名/品種']} ({days}日目)")
+            reply = "【現在の稼働ロット】\n" + "\n".join(lot_list)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
         return
 
     if user_id in USER_STATES:
@@ -213,11 +258,17 @@ def handle_message(event):
             except Exception as e:
                 print(f"Profile fetch failed: {e}")
                 user_name = "管理者"
-            save_log(user_id, user_name, final_data, f"[Flow] {final_data}", image_url=final_data.get("image_url", "スキップ"))
-            USER_STATES.pop(user_id, None)
-            reply = f"報告を完了しました。記録ありがとうございました！\n（カテゴリ：{final_data.get('category')}）"
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-            send_group_summary(user_name, final_data)
+            
+            try:
+                save_log(user_id, user_name, final_data, f"[Flow] {final_data}", image_url=final_data.get("image_url", "スキップ"))
+                reply = f"報告を完了しました。記録ありがとうございました！\n（カテゴリ：{final_data.get('category')}）"
+                USER_STATES.pop(user_id, None)
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+                send_group_summary(user_name, final_data)
+            except Exception as e:
+                reply = f"⚠️スプレッドシートへの保存に失敗しました。エラーログを確認してください。\n({str(e)})"
+                USER_STATES.pop(user_id, None)
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
             return
 
         if next_state:
@@ -247,10 +298,18 @@ def handle_image(event):
             print(f"Profile fetch failed: {e}")
             user_name = "管理者"
 
-        save_log(user_id, user_name, final_data, "[Image Flow]", image_url=public_url)
-        USER_STATES.pop(user_id, None)
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
-        send_group_summary(user_name, final_data, has_photo=True)
+        try:
+            if public_url.startswith("処理エラー"):
+                raise Exception(public_url)
+                
+            save_log(user_id, user_name, final_data, "[Image Flow]", image_url=public_url)
+            USER_STATES.pop(user_id, None)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
+            send_group_summary(user_name, final_data, has_photo=True, image_url=public_url)
+        except Exception as e:
+            reply_text = f"⚠️スプレッドシートやDriveへの保存に失敗しました。エラーログを確認してください。\n({str(e)})"
+            USER_STATES.pop(user_id, None)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
 
     elif user_id in USER_STATES:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="数値の入力が完了していません。まずは数値を入力してください。"))
@@ -261,17 +320,37 @@ def handle_image(event):
 # ---------------------------------------------------------------------------
 # Group notification
 # ---------------------------------------------------------------------------
-def send_group_summary(user_name, data, has_photo=False):
+def send_group_summary(user_name, data, has_photo=False, image_url=None):
     if not LINE_GROUP_ID:
         return
     category = data.get('category', '一般')
     header = "🌱 発芽報告" if category == "種から発芽" else "【与那国水耕栽培 報告】"
     metrics = f"pH: {data.get('ph','-')} / EC: {data.get('ec','-')}\n室温: {data.get('room_temp','-')}℃ / 湿度: {data.get('humidity','-')}%"
-    summary = f"{header}\n報告者：{user_name}\nロット：{data.get('lot_name')}\n{metrics}\n写真：{'あり' if has_photo else 'なし'}"
+    photo_label = image_url if has_photo and image_url and not image_url.startswith("処理エラー") else "なし"
+    summary = f"{header}\n報告者：{user_name}\nロット：{data.get('lot_name')}\n{metrics}\n写真：{photo_label}"
+
+    messages = [TextSendMessage(text=summary)]
+
+    # Attach the actual photo if available
+    if has_photo and image_url and not image_url.startswith("処理エラー"):
+        try:
+            messages.append(ImageSendMessage(
+                original_content_url=image_url,
+                preview_image_url=image_url
+            ))
+        except Exception as e:
+            print(f"ImageSendMessage creation failed: {e}")
+
     try:
-        line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
+        line_bot_api.push_message(LINE_GROUP_ID, messages)
     except Exception as e:
         print(f"Group summary push failed: {e}")
+        # Fallback: try sending text only if image caused the failure
+        if len(messages) > 1:
+            try:
+                line_bot_api.push_message(LINE_GROUP_ID, messages[0])
+            except Exception as e2:
+                print(f"Group text-only fallback also failed: {e2}")
 
 
 if __name__ == "__main__":
