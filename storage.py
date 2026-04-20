@@ -24,29 +24,24 @@ def _get_credentials():
     if _cached_creds:
         return _cached_creds
 
-    # Priority 1: Use environment variable
-    service_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
-    scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-    ]
+    from google.oauth2.credentials import Credentials
     
-    if service_json:
-        try:
-            creds_dict = json.loads(service_json)
-        except json.JSONDecodeError:
-            creds_dict = json.loads(service_json.replace('\\n', '\n'))
-        _cached_creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        return _cached_creds
-    
-    # Priority 2: Try local file path
-    json_path = os.path.join(os.path.dirname(__file__), 'gen-lang-client-0030599774-9463e82c6afb.json')
-    if os.path.exists(json_path):
-        _cached_creds = Credentials.from_service_account_file(json_path, scopes=scopes)
-        return _cached_creds
-    
-    print("Error: Neither GOOGLE_SERVICE_ACCOUNT_JSON env var nor local credentials file found.")
-    return None
+    client_id = os.environ.get('GOOGLE_CLIENT_ID')
+    client_secret = os.environ.get('GOOGLE_CLIENT_SECRET')
+    refresh_token = os.environ.get('GOOGLE_REFRESH_TOKEN')
+
+    if not (client_id and client_secret and refresh_token):
+        print("Error: Missing OAuth2 environment variables (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN).")
+        return None
+
+    _cached_creds = Credentials(
+        token=None,
+        refresh_token=refresh_token,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=client_id,
+        client_secret=client_secret
+    )
+    return _cached_creds
 
 def get_gsheet_client():
     global _cached_gsheet_client
