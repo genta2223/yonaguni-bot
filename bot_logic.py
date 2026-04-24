@@ -80,7 +80,7 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
         days, phase = calculate_days_and_phase(str(lot['種まき日']))
         data = {"lot_name": text, "seeding_date": str(lot['種まき日']), "variety": lot.get('品種', 'レタス'), "days": days, "phase": phase}
         
-        categories = ["種から発芽", "定植後（成長期）", "収穫間近", "異常発生"]
+        categories = ["種から発芽", "発芽後定植前", "定植後（成長期）", "収穫間近", "異常発生"]
         return (f"【{text}】（種まきから{days}日目）を確認しました。現在の状況カテゴリを選択してください。", 
                 STATE_AWAITING_CATEGORY, data, get_quick_reply(categories))
 

@@ -369,7 +369,7 @@ def send_group_summary(user_name, data, has_photo=False, image_url=None):
     if not LINE_GROUP_ID:
         return
     category = data.get('category', '一般')
-    header = "🌱 発芽報告" if category == "種から発芽" else "【与那国水耕栽培 報告】"
+    header = "🌱 発芽報告" if category in ["種から発芽", "発芽後定植前"] else "【与那国水耕栽培 報告】"
     metrics = f"pH: {data.get('ph','-')} / EC: {data.get('ec','-')}\n室温: {data.get('room_temp','-')}℃ / 湿度: {data.get('humidity','-')}%"
     
     memo_text = f"\nメモ：{data.get('memo')}" if data.get('memo') and data.get('memo') != "なし" else ""
