@@ -100,7 +100,7 @@ def init_db():
             master_sheet = sh.worksheet("栽培マスター")
         except gspread.exceptions.WorksheetNotFound:
             master_sheet = sh.add_worksheet(title="栽培マスター", rows="100", cols="6")
-            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス", "予定数量", "登録者"], 1)
+            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス", "予定数量", "登録者", "画像URL"], 1)
             jst = timezone(timedelta(hours=9))
             today = (datetime.now(jst)).strftime('%Y-%m-%d')
             master_sheet.append_row(["LOT-001", "レタス-A", today, "稼働中", "100", "システム"])
@@ -115,13 +115,35 @@ def get_active_lots():
     if not client: return []
     try:
         sheet = client.open_by_key(SPREADSHEET_ID).worksheet("栽培マスター")
-        records = sheet.get_all_records()
-        return [r for r in records if r.get("ステータス") == "稼働中"]
+        values = sheet.get_all_values()
+        if len(values) <= 1:
+            return []
+        
+        headers = values[0]
+        try:
+            status_idx = headers.index("ステータス")
+            name_idx = headers.index("ロット名/品種")
+            date_idx = headers.index("種まき日")
+        except ValueError as e:
+            print(f"Error finding column index: {e}")
+            return []
+            
+        active_lots = []
+        for row in values[1:]:
+            if len(row) > status_idx and row[status_idx] == "稼働中":
+                name = row[name_idx] if len(row) > name_idx else ""
+                date = row[date_idx] if len(row) > date_idx else ""
+                active_lots.append({
+                    "ロット名/品種": name,
+                    "種まき日": date,
+                    "品種": name.split('-')[0] if '-' in name else name
+                })
+        return active_lots
     except Exception as e:
         print(f"Error fetching lots: {e}")
         return []
 
-def save_new_lot(user_name, variety, seeding_date, qty):
+def save_new_lot(user_name, variety, seeding_date, qty, image_url=""):
     client = get_gsheet_client()
     if not client: return None
 
@@ -132,7 +154,7 @@ def save_new_lot(user_name, variety, seeding_date, qty):
         lot_id = f"LOT-{now.strftime('%Y%m%d-%H%M')}"
         lot_name = f"{variety}-{now.strftime('%m%d')}"
         
-        row = [lot_id, lot_name, seeding_date, "稼働中", qty, user_name]
+        row = [lot_id, lot_name, seeding_date, "稼働中", qty, user_name, image_url]
         sheet.append_row(row)
         print(f"Successfully registered new planting: {lot_id}")
         return lot_name

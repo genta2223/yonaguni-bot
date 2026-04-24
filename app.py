@@ -236,7 +236,7 @@ def handle_message(event):
                 print(f"Profile fetch failed: {e}")
                 user_name = "管理者"
 
-            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"))
+            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), final_data.get("image_url", ""))
             USER_STATES.pop(user_id, None)
 
             reply = f"作付け登録を完了しました！新しいロット【{lot_name}】を作成しました。"
@@ -244,6 +244,8 @@ def handle_message(event):
 
             if LINE_GROUP_ID:
                 summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\n野菜：{final_data.get('variety')}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}"
+                if final_data.get("image_url") and final_data.get("image_url") != "なし":
+                     summary += f"\n写真：{final_data.get('image_url')}"
                 try:
                     line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
                 except Exception as e:
@@ -306,6 +308,44 @@ def handle_image(event):
             USER_STATES.pop(user_id, None)
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
             send_group_summary(user_name, final_data, has_photo=True, image_url=public_url)
+        except Exception as e:
+            reply_text = f"⚠️スプレッドシートやDriveへの保存に失敗しました。エラーログを確認してください。\n({str(e)})"
+            USER_STATES.pop(user_id, None)
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+
+    elif USER_STATES.get(user_id) == "AWAITING_PLANT_PHOTO":
+        final_data = USER_DATA.pop(user_id, {})
+        public_url = process_and_store_image(event.message.id)
+        final_data["image_url"] = public_url
+
+        try:
+            profile = line_bot_api.get_profile(user_id)
+            user_name = profile.display_name
+        except Exception as e:
+            print(f"Profile fetch failed: {e}")
+            user_name = "管理者"
+
+        try:
+            if public_url.startswith("処理エラー"):
+                raise Exception(public_url)
+                
+            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), public_url)
+
+            USER_STATES.pop(user_id, None)
+            reply_text = f"作付け登録を完了し、写真を保存しました！新しいロット【{lot_name}】を作成しました。"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
+            
+            if LINE_GROUP_ID:
+                summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\nロット：{lot_name}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}\n写真：{public_url}"
+                try:
+                    line_bot_api.push_message(LINE_GROUP_ID, [
+                        TextSendMessage(text=summary),
+                        ImageSendMessage(original_content_url=public_url, preview_image_url=public_url)
+                    ])
+                except Exception as e:
+                    print(f"Group summary push failed: {e}")
+                    line_bot_api.push_message(LINE_GROUP_ID, TextSendMessage(text=summary))
+
         except Exception as e:
             reply_text = f"⚠️スプレッドシートやDriveへの保存に失敗しました。エラーログを確認してください。\n({str(e)})"
             USER_STATES.pop(user_id, None)

@@ -63,8 +63,8 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
     elif state == STATE_AWAITING_PLANT_QTY:
         qty = extract_number(text)
         if qty is None: return ("予定数量を数字で入力してください。", state, {}, None)
-        return ("予定数量を受け付けました。作付け登録を完了します！", 
-                "DONE_PLANTING", {"qty": int(qty)}, None)
+        return ("予定数量を受け付けました。最後に、作付け直後の様子の写真を1枚送信してください。\n（写真はスキップする場合「なし」と入力してください）", 
+                "AWAITING_PLANT_PHOTO", {"qty": int(qty)}, None)
 
     elif state == STATE_AWAITING_LOT:
         # User selected a lot
@@ -135,6 +135,11 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
     elif state == STATE_AWAITING_PHOTO_UPLOAD:
         if text in ["なし", "スキップ", "skip"]:
             return ("写真をスキップしました。すべての記録が完了しました！お疲れ様でした。", "DONE", {"image_url": "なし"}, None)
+        return ("写真は最後に送ってください。または「なし」と入力してください。", state, {}, None)
+
+    elif state == "AWAITING_PLANT_PHOTO":
+        if text in ["なし", "スキップ", "skip"]:
+            return ("写真をスキップしました。作付け登録を完了します！", "DONE_PLANTING", {"image_url": "なし"}, None)
         return ("写真は最後に送ってください。または「なし」と入力してください。", state, {}, None)
 
     return ("エラーが発生しました。もう一度メニューから報告を開始してください。", None, {}, None)
