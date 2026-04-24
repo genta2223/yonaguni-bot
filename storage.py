@@ -100,7 +100,7 @@ def init_db():
             master_sheet = sh.worksheet("栽培マスター")
         except gspread.exceptions.WorksheetNotFound:
             master_sheet = sh.add_worksheet(title="栽培マスター", rows="100", cols="6")
-            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス", "予定数量", "登録者", "画像URL"], 1)
+            master_sheet.insert_row(["ロットID", "ロット名/品種", "種まき日", "ステータス", "予定数量", "登録者", "画像URL", "メモ"], 1)
             jst = timezone(timedelta(hours=9))
             today = (datetime.now(jst)).strftime('%Y-%m-%d')
             master_sheet.append_row(["LOT-001", "レタス-A", today, "稼働中", "100", "システム"])
@@ -143,7 +143,7 @@ def get_active_lots():
         print(f"Error fetching lots: {e}")
         return []
 
-def save_new_lot(user_name, variety, seeding_date, qty, image_url=""):
+def save_new_lot(user_name, variety, seeding_date, qty, image_url="", memo=""):
     client = get_gsheet_client()
     if not client: return None
 
@@ -154,7 +154,7 @@ def save_new_lot(user_name, variety, seeding_date, qty, image_url=""):
         lot_id = f"LOT-{now.strftime('%Y%m%d-%H%M')}"
         lot_name = f"{variety}-{now.strftime('%m%d')}"
         
-        row = [lot_id, lot_name, seeding_date, "稼働中", qty, user_name, image_url]
+        row = [lot_id, lot_name, seeding_date, "稼働中", qty, user_name, image_url, memo]
         sheet.append_row(row)
         print(f"Successfully registered new planting: {lot_id}")
         return lot_name

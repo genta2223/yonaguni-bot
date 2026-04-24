@@ -63,8 +63,13 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
     elif state == STATE_AWAITING_PLANT_QTY:
         qty = extract_number(text)
         if qty is None: return ("予定数量を数字で入力してください。", state, {}, None)
-        return ("予定数量を受け付けました。最後に、作付け直後の様子の写真を1枚送信してください。\n（写真はスキップする場合「なし」と入力してください）", 
-                "AWAITING_PLANT_PHOTO", {"qty": int(qty)}, None)
+        return ("予定数量を受け付けました。\n次に、作付けに関するメモや特記事項があれば自由に入力してください。\n（特になければ「なし」と送ってください）", 
+                "AWAITING_PLANT_MEMO", {"qty": int(qty)}, None)
+
+    elif state == "AWAITING_PLANT_MEMO":
+        memo = text if text not in ["なし", "スキップ", "skip"] else ""
+        return ("最後に、作付け直後の様子の写真を1枚送信してください。\n（写真はスキップする場合「なし」と入力してください）", 
+                "AWAITING_PLANT_PHOTO", {"memo": memo}, None)
 
     elif state == STATE_AWAITING_LOT:
         # User selected a lot
@@ -127,9 +132,16 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
     elif state == STATE_AWAITING_HUMIDITY:
         val = extract_number(text)
         if val is None: return ("数字で入力してください。湿度は？", state, {}, None)
-        return ("数値の入力がすべて完了しました！\n\nそれでは、最後に**横向き（ランドスケープ）**で作物の写真を**1枚だけ**撮影して送信してください。\n※横向きで撮ることで、成長の比較がしやすくなります！\n（写真はスキップする場合「なし」と入力してください）", 
-                STATE_AWAITING_PHOTO_UPLOAD, 
+        return ("数値の入力がすべて完了しました！\n次に、メモや特記事項があれば自由に入力してください。\n（特になければ「なし」と送ってください）", 
+                "AWAITING_NUMERIC_MEMO", 
                 {"humidity": val}, 
+                None)
+
+    elif state == "AWAITING_NUMERIC_MEMO":
+        memo = text if text not in ["なし", "スキップ", "skip"] else ""
+        return ("それでは、最後に**横向き（ランドスケープ）**で作物の写真を**1枚だけ**撮影して送信してください。\n※横向きで撮ることで、成長の比較がしやすくなります！\n（写真はスキップする場合「なし」と入力してください）", 
+                STATE_AWAITING_PHOTO_UPLOAD, 
+                {"memo": memo}, 
                 None)
 
     elif state == STATE_AWAITING_PHOTO_UPLOAD:

@@ -236,7 +236,7 @@ def handle_message(event):
                 print(f"Profile fetch failed: {e}")
                 user_name = "管理者"
 
-            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), final_data.get("image_url", ""))
+            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), final_data.get("image_url", ""), final_data.get("memo", ""))
             USER_STATES.pop(user_id, None)
 
             reply = f"作付け登録を完了しました！新しいロット【{lot_name}】を作成しました。"
@@ -244,6 +244,8 @@ def handle_message(event):
 
             if LINE_GROUP_ID:
                 summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\n野菜：{final_data.get('variety')}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}"
+                if final_data.get("memo") and final_data.get("memo") != "なし":
+                    summary += f"\nメモ：{final_data.get('memo')}"
                 if final_data.get("image_url") and final_data.get("image_url") != "なし":
                      summary += f"\n写真：{final_data.get('image_url')}"
                 try:
@@ -262,7 +264,7 @@ def handle_message(event):
                 user_name = "管理者"
             
             try:
-                save_log(user_id, user_name, final_data, f"[Flow] {final_data}", image_url=final_data.get("image_url", "スキップ"))
+                save_log(user_id, user_name, final_data, final_data.get("memo", ""), image_url=final_data.get("image_url", "スキップ"))
                 reply = f"報告を完了しました。記録ありがとうございました！\n（カテゴリ：{final_data.get('category')}）"
                 USER_STATES.pop(user_id, None)
                 line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
@@ -304,7 +306,7 @@ def handle_image(event):
             if public_url.startswith("処理エラー"):
                 raise Exception(public_url)
                 
-            save_log(user_id, user_name, final_data, "[Image Flow]", image_url=public_url)
+            save_log(user_id, user_name, final_data, final_data.get("memo", ""), image_url=public_url)
             USER_STATES.pop(user_id, None)
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="写真を保存し、すべての報告を完了しました！"))
             send_group_summary(user_name, final_data, has_photo=True, image_url=public_url)
@@ -329,14 +331,17 @@ def handle_image(event):
             if public_url.startswith("処理エラー"):
                 raise Exception(public_url)
                 
-            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), public_url)
+            lot_name = save_new_lot(user_name, final_data.get("variety"), final_data.get("seeding_date"), final_data.get("qty"), public_url, final_data.get("memo", ""))
 
             USER_STATES.pop(user_id, None)
             reply_text = f"作付け登録を完了し、写真を保存しました！新しいロット【{lot_name}】を作成しました。"
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text))
             
             if LINE_GROUP_ID:
-                summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\nロット：{lot_name}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}\n写真：{public_url}"
+                summary = f"🌱 【新規作付け報告】\n報告者：{user_name}\nロット：{lot_name}\n種まき日：{final_data.get('seeding_date')}\n予定数量：{final_data.get('qty')}"
+                if final_data.get("memo") and final_data.get("memo") != "なし":
+                    summary += f"\nメモ：{final_data.get('memo')}"
+                summary += f"\n写真：{public_url}"
                 try:
                     line_bot_api.push_message(LINE_GROUP_ID, [
                         TextSendMessage(text=summary),
@@ -366,8 +371,10 @@ def send_group_summary(user_name, data, has_photo=False, image_url=None):
     category = data.get('category', '一般')
     header = "🌱 発芽報告" if category == "種から発芽" else "【与那国水耕栽培 報告】"
     metrics = f"pH: {data.get('ph','-')} / EC: {data.get('ec','-')}\n室温: {data.get('room_temp','-')}℃ / 湿度: {data.get('humidity','-')}%"
+    
+    memo_text = f"\nメモ：{data.get('memo')}" if data.get('memo') and data.get('memo') != "なし" else ""
     photo_label = image_url if has_photo and image_url and not image_url.startswith("処理エラー") else "なし"
-    summary = f"{header}\n報告者：{user_name}\nロット：{data.get('lot_name')}\n{metrics}\n写真：{photo_label}"
+    summary = f"{header}\n報告者：{user_name}\nロット：{data.get('lot_name')}\n{metrics}{memo_text}\n写真：{photo_label}"
 
     messages = [TextSendMessage(text=summary)]
 
