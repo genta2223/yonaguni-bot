@@ -10,7 +10,7 @@ from linebot.models import (
     PostbackEvent, QuickReply, QuickReplyButton, MessageAction, PostbackAction
 )
 from bot_logic import (
-    handle_interactive_step, get_quick_reply, calculate_days_and_phase,
+    handle_interactive_step, handle_back_step, get_quick_reply, calculate_days_and_phase,
     STATE_AWAITING_LOT, STATE_AWAITING_CATEGORY, STATE_AWAITING_STAGE,
     STATE_AWAITING_PH, STATE_AWAITING_ROOM_TEMP, STATE_AWAITING_HUMIDITY,
     STATE_AWAITING_PHOTO_UPLOAD, STATE_AWAITING_PLANT_VARIETY
@@ -166,6 +166,27 @@ def handle_message(event):
         USER_STATES.pop(user_id, None)
         USER_DATA.pop(user_id, None)
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="入力をキャンセルしました。最初からやり直してください。"))
+        return
+
+    if user_text == "戻る" and user_id in USER_STATES:
+        current_state = USER_STATES[user_id]
+        active_lots = get_active_lots()
+        user_data = USER_DATA.get(user_id, {})
+        msg, prev_state, data_keys_to_remove, qr = handle_back_step(user_id, current_state, user_data, active_lots)
+        
+        if prev_state:
+            # Remove the data keys that we are stepping back from
+            for key in data_keys_to_remove:
+                user_data.pop(key, None)
+            USER_DATA[user_id] = user_data
+            USER_STATES[user_id] = prev_state
+            
+            if qr:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg, quick_reply=qr))
+            else:
+                line_bot_api.reply_message(event.reply_token, TextSendMessage(text=msg))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="これ以上戻ることはできません。やり直す場合は「キャンセル」と入力してください。"))
         return
 
     # Handle rich menu text commands
