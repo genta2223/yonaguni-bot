@@ -16,6 +16,7 @@ STATE_AWAITING_PHOTO_UPLOAD = "AWAITING_PHOTO_UPLOAD"
 
 # Planting Report States
 STATE_AWAITING_PLANT_VARIETY = "AWAITING_PLANT_VARIETY"
+STATE_AWAITING_CUSTOM_VARIETY = "AWAITING_CUSTOM_VARIETY"
 STATE_AWAITING_PLANT_DATE = "AWAITING_PLANT_DATE"
 STATE_AWAITING_PLANT_QTY = "AWAITING_PLANT_QTY"
 
@@ -41,6 +42,13 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
     if active_lots is None:
         active_lots = []
     if state == STATE_AWAITING_PLANT_VARIETY:
+        if text == "その他":
+            return ("野菜の名前を入力してください。", 
+                    STATE_AWAITING_CUSTOM_VARIETY, {}, get_quick_reply(["戻る"]))
+        return (f"【{text}】ですね。次に「種まき日」を入力してください。\n（例: 2026-04-19 または 本日）", 
+                STATE_AWAITING_PLANT_DATE, {"variety": text}, get_quick_reply(["戻る"]))
+
+    elif state == STATE_AWAITING_CUSTOM_VARIETY:
         return (f"【{text}】ですね。次に「種まき日」を入力してください。\n（例: 2026-04-19 または 本日）", 
                 STATE_AWAITING_PLANT_DATE, {"variety": text}, get_quick_reply(["戻る"]))
 
@@ -165,9 +173,13 @@ def handle_back_step(user_id, current_state, user_data, active_lots):
         active_lots = []
 
     # Planting Report Back Steps
-    if current_state == STATE_AWAITING_PLANT_DATE:
+    if current_state == STATE_AWAITING_CUSTOM_VARIETY:
         return ("【野菜の種類】を再度選択してください。", 
-                STATE_AWAITING_PLANT_VARIETY, ["variety"], get_quick_reply(["レタス", "水菜", "ルッコラ"]))
+                STATE_AWAITING_PLANT_VARIETY, [], get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"]))
+
+    elif current_state == STATE_AWAITING_PLANT_DATE:
+        return ("【野菜の種類】を再度選択してください。", 
+                STATE_AWAITING_PLANT_VARIETY, ["variety"], get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"]))
                 
     elif current_state == STATE_AWAITING_PLANT_QTY:
         variety = user_data.get('variety', '')

@@ -124,7 +124,7 @@ def handle_postback(event):
         USER_STATES[user_id] = STATE_AWAITING_PLANT_VARIETY
         USER_DATA[user_id] = {"mode": "planting"}
         reply_text = "【与那国水耕栽培】作付け報告（新規登録）を開始します。\nまずは【野菜の種類】を選択してください。"
-        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ"])
+        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
 
     elif data == "action=numeric_report":
@@ -196,7 +196,7 @@ def handle_message(event):
         USER_STATES[user_id] = STATE_AWAITING_PLANT_VARIETY
         USER_DATA[user_id] = {"mode": "planting"}
         reply_text = "【与那国水耕栽培】作付け報告（新規登録）を開始します。\nまずは【野菜の種類】を選択してください。"
-        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ"])
+        quick_reply = get_quick_reply(["レタス", "水菜", "ルッコラ", "その他"])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         return
 
