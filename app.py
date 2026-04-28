@@ -108,6 +108,19 @@ def test_log():
         return f"Log Error: {str(e)}\n{traceback.format_exc()}", 500
 
 
+@app.route("/test_lots", methods=['GET'])
+def test_lots():
+    if request.args.get("token") != ADMIN_TOKEN:
+        abort(403)
+    try:
+        from storage import get_active_lots
+        lots = get_active_lots(debug=True)
+        return f"Active lots: {lots}", 200
+    except Exception as e:
+        import traceback
+        return f"Lots Fetch Error: {str(e)}\n{traceback.format_exc()}", 500
+
+
 # ---------------------------------------------------------------------------
 # Postback handler (rich menu buttons)
 # ---------------------------------------------------------------------------

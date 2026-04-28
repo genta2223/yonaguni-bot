@@ -110,9 +110,11 @@ def init_db():
 
     print("Google Sheets storage initialization complete.")
 
-def get_active_lots():
+def get_active_lots(debug=False):
     client = get_gsheet_client()
-    if not client: return []
+    if not client: 
+        if debug: raise Exception("Google Sheets client init failed.")
+        return []
     try:
         sheet = client.open_by_key(SPREADSHEET_ID).worksheet("栽培マスター")
         values = sheet.get_all_values()
@@ -140,6 +142,7 @@ def get_active_lots():
                 })
         return active_lots
     except Exception as e:
+        if debug: raise e
         print(f"Error fetching lots: {e}")
         return []
 
