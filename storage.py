@@ -119,7 +119,7 @@ def get_active_lots():
         if len(values) <= 1:
             return []
         
-        headers = values[0]
+        headers = [str(h).strip() for h in values[0]]
         try:
             status_idx = headers.index("ステータス")
             name_idx = headers.index("ロット名/品種")
@@ -130,13 +130,13 @@ def get_active_lots():
             
         active_lots = []
         for row in values[1:]:
-            if len(row) > status_idx and row[status_idx] == "稼働中":
-                name = row[name_idx] if len(row) > name_idx else ""
-                date = row[date_idx] if len(row) > date_idx else ""
+            if len(row) > status_idx and row[status_idx].strip() == "稼働中":
+                name = row[name_idx].strip() if len(row) > name_idx else ""
+                date = row[date_idx].strip() if len(row) > date_idx else ""
                 active_lots.append({
                     "ロット名/品種": name,
                     "種まき日": date,
-                    "品種": name.split('-')[0] if '-' in name else name
+                    "品種": name.split('-')[0].strip() if '-' in name else name
                 })
         return active_lots
     except Exception as e:
