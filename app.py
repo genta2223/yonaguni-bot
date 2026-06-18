@@ -173,7 +173,9 @@ def handle_message(event):
     user_text = event.message.text.strip()
 
     if event.source.type != 'user':
-        return  # Ignore group messages for guided flow
+        # Ignore group messages unless the user is in a flow or explicitly mentioned the bot
+        if user_id not in USER_STATES and "@与那国" not in user_text and "@アシスタント" not in user_text and "@bot" not in user_text.lower():
+            return
 
     if user_text in ["キャンセル", "中止", "やめる"]:
         USER_STATES.pop(user_id, None)
@@ -323,6 +325,11 @@ def handle_message(event):
 @handler.add(MessageEvent, message=ImageMessage)
 def handle_image(event):
     user_id = event.source.user_id
+
+    # Ignore images in groups entirely unless the user is actively in a reporting flow
+    if event.source.type != 'user' and user_id not in USER_STATES:
+        return
+
     if USER_STATES.get(user_id) == STATE_AWAITING_PHOTO_UPLOAD:
         final_data = USER_DATA.pop(user_id, {})
 
