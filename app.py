@@ -11,6 +11,7 @@ from linebot.models import (
 )
 from bot_logic import (
     handle_interactive_step, handle_back_step, get_quick_reply, calculate_days_and_phase,
+    filter_old_lots,
     STATE_AWAITING_LOT, STATE_AWAITING_CATEGORY, STATE_AWAITING_STAGE,
     STATE_AWAITING_PH, STATE_AWAITING_ROOM_TEMP, STATE_AWAITING_HUMIDITY,
     STATE_AWAITING_PHOTO_UPLOAD, STATE_AWAITING_PLANT_VARIETY
@@ -142,13 +143,14 @@ def handle_postback(event):
 
     elif data == "action=numeric_report":
         active_lots = get_active_lots()
-        if not active_lots:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在稼働中のロットがありません。"))
+        filtered_lots = filter_old_lots(active_lots)
+        if not filtered_lots:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在報告対象となる稼働中のロット（過去7週以内）がありません。"))
             return
         USER_STATES[user_id] = STATE_AWAITING_LOT
         USER_DATA[user_id] = {"mode": "numerical"}
         reply_text = "【与那国水耕栽培】数値報告を開始します。まずは【対象ロット】を選択してください。"
-        quick_reply = get_quick_reply([l['ロット名/品種'] for l in active_lots])
+        quick_reply = get_quick_reply([l['ロット名/品種'] for l in filtered_lots])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
 
     elif data == "action=status_check":
@@ -219,13 +221,14 @@ def handle_message(event):
         USER_STATES.pop(user_id, None)
         USER_DATA.pop(user_id, None)
         active_lots = get_active_lots()
-        if not active_lots:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在稼働中のロットがありません。"))
+        filtered_lots = filter_old_lots(active_lots)
+        if not filtered_lots:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="現在報告対象となる稼働中のロット（過去7週以内）がありません。"))
             return
         USER_STATES[user_id] = STATE_AWAITING_LOT
         USER_DATA[user_id] = {"mode": "numerical"}
         reply_text = "【与那国水耕栽培】数値報告を開始します。まずは【対象ロット】を選択してください。"
-        quick_reply = get_quick_reply([l['ロット名/品種'] for l in active_lots])
+        quick_reply = get_quick_reply([l['ロット名/品種'] for l in filtered_lots])
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply_text, quick_reply=quick_reply))
         return
 

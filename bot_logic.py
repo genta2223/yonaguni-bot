@@ -34,6 +34,16 @@ def calculate_days_and_phase(seeding_date_str):
     except Exception:
         return 0, 1
 
+def filter_old_lots(lots):
+    """Filters out lots that are older than 7 weeks (49 days)."""
+    filtered = []
+    for l in lots:
+        days, _ = calculate_days_and_phase(str(l['種まき日']))
+        if days <= 49:
+            filtered.append(l)
+    return filtered
+
+
 def handle_interactive_step(user_id, state, text, active_lots=None):
     """
     Handles a single step in the interactive reporting flow.
@@ -83,7 +93,8 @@ def handle_interactive_step(user_id, state, text, active_lots=None):
         # User selected a lot
         lot = next((l for l in active_lots if l['ロット名/品種'] == text), None)
         if not lot:
-            return ("リストからロットを選択してください。", state, {}, get_quick_reply([l['ロット名/品種'] for l in active_lots]))
+            filtered_lots = filter_old_lots(active_lots)
+            return ("リストからロットを選択してください。", state, {}, get_quick_reply([l['ロット名/品種'] for l in filtered_lots]))
         
         days, phase = calculate_days_and_phase(str(lot['種まき日']))
         data = {"lot_name": text, "seeding_date": str(lot['種まき日']), "variety": lot.get('品種', 'レタス'), "days": days, "phase": phase}
@@ -196,8 +207,9 @@ def handle_back_step(user_id, current_state, user_data, active_lots):
 
     # Numeric Report Back Steps
     elif current_state == STATE_AWAITING_CATEGORY:
+        filtered_lots = filter_old_lots(active_lots)
         return ("対象ロットを再度選択してください。", 
-                STATE_AWAITING_LOT, ["lot_name", "seeding_date", "variety", "days", "phase"], get_quick_reply([l['ロット名/品種'] for l in active_lots]))
+                STATE_AWAITING_LOT, ["lot_name", "seeding_date", "variety", "days", "phase"], get_quick_reply([l['ロット名/品種'] for l in filtered_lots]))
 
     elif current_state == STATE_AWAITING_STAGE:
         categories = ["種から発芽", "発芽後定植前", "定植後（成長期）", "収穫間近", "異常発生"]
