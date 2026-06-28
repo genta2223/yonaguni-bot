@@ -155,11 +155,12 @@ def handle_postback(event):
 
     elif data == "action=status_check":
         active_lots = get_active_lots()
-        if not active_lots:
-            reply = "現在稼働中のロットはありません。"
+        filtered_lots = filter_old_lots(active_lots)
+        if not filtered_lots:
+            reply = "現在報告対象となる稼働中のロット（過去7週以内）はありません。"
         else:
             lot_list = []
-            for l in active_lots:
+            for l in filtered_lots:
                 days, _ = calculate_days_and_phase(str(l['種まき日']))
                 lot_list.append(f"・{l['ロット名/品種']} ({days}日目)")
             reply = "【現在の稼働ロット】\n" + "\n".join(lot_list)
@@ -236,11 +237,12 @@ def handle_message(event):
         USER_STATES.pop(user_id, None)
         USER_DATA.pop(user_id, None)
         active_lots = get_active_lots()
-        if not active_lots:
-            reply = "現在稼働中のロットはありません。"
+        filtered_lots = filter_old_lots(active_lots)
+        if not filtered_lots:
+            reply = "現在報告対象となる稼働中のロット（過去7週以内）はありません。"
         else:
             lot_list = []
-            for l in active_lots:
+            for l in filtered_lots:
                 days, _ = calculate_days_and_phase(str(l['種まき日']))
                 lot_list.append(f"・{l['ロット名/品種']} ({days}日目)")
             reply = "【現在の稼働ロット】\n" + "\n".join(lot_list)
